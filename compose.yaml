@@ -1,0 +1,20 @@
+services:
+
+  ecommerce-gateway:
+    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.0.1
+    platform: linux/amd64
+    network_mode: host
+    ports:
+      - "8080:8080"
+      - "7070:7070"
+    container_name: ecommerce-gateway
+    restart: always
+    volumes:
+      - ./cmd/gateway/config.yaml:/data/conf/config.yaml
+    command:
+      - "/app/gateway"
+      - "-conf"
+      - "/app/configs/config.yaml"
+
+# docker cp config.yaml ecommerce-gateway:/app/configs/config.yaml
+# docker compose restart
