@@ -78,7 +78,8 @@ func init() {
 	flag.StringVar(&priorityConfigDir, "conf.priority", "", "priority config directory, eg: -conf.priority ./canary")
 	flag.StringVar(&ctrlName, "ctrl.name", os.Getenv("ADVERTISE_NAME"), "control gateway name, eg: gateway")
 	flag.StringVar(&ctrlService, "ctrl.service", "", "control service host, eg: http://127.0.0.1:8000")
-	flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://99.suyiiyii.top:3026", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
+	// flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://99.suyiiyii.top:3026", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
+	flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://159.75.231.54:8500", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
 }
 
 func makeDiscovery() registry.Discovery {

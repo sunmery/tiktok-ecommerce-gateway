@@ -1,12 +1,11 @@
 services:
 
   ecommerce-gateway:
-    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.0.1
+    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.0.2
     platform: linux/amd64
     network_mode: host
     ports:
       - "8080:8080"
-      - "7070:7070"
     container_name: ecommerce-gateway
     restart: always
     volumes:

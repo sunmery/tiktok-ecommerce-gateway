@@ -5,7 +5,13 @@ middlewares:
   - name: tracing
     options:
       '@type': type.googleapis.com/gateway.middleware.tracing.v1.Tracing
-      httpEndpoint: '99.suyiiyii.top:3002' # default opentelemetry collector port
+      httpEndpoint: '99.suyiiyii.top:3003' # default opentelemetry collector port
+      insecure: true # http方式
+  - name: "auth"
+    options:
+      "@type": "type.googleapis.com/google.protobuf.StringValue"
+      value: "token"
+    required: true
   - name: logging
   - name: jwt
   #  - name: rbac
@@ -15,78 +21,82 @@ middlewares:
       '@type': type.googleapis.com/gateway.middleware.cors.v1.Cors
       allowCredentials: true
       allowOrigins:
-        - .google.com
+        - http://localhost:3000
+        - http://localhost:443
+        - .apikv.com
       allowMethods:
         - GET
         - POST
+        - PUT
+        - PATCH
+        - DELETE
         - OPTIONS
+
 endpoints:
-  # 商品微服务
-  - path: /v1/products
+
+  - path: /v1/users*
+    timeout: 1s
+    description: "Get user information"
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-user-v1'
+        weight: 100
+        health_check: { }
+    retry:
+      attempts: 3
+      per_try_timeout: "2s"
+      conditions:
+        - by_status_code: "500-599"
+        - by_header:
+            name: "grpc-status"
+            value: "14"
+    metadata:
+      cache: "true"
+
+  - path: /v1/products*
     timeout: 1s
     protocol: HTTP
     backends:
       - target: 'discovery:///ecommerce-product-v1'
-    middlewares:
-      - name: circuitbreaker
-        options:
-          '@type': type.googleapis.com/gateway.middleware.circuitbreaker.v1.CircuitBreaker
-          successRatio: { "success": 0.6, "request": "1", "bucket": "10", "window": "3s" }
-          backupService: { "endpoint": { "backends": [ { "target": "127.0.0.1:8001" } ] } }
-          assertCondtions:
-            - { "by_status_code": "200" }
-      - name: rewrite
-        options:
-          '@type': type.googleapis.com/gateway.middleware.rewrite.v1.Rewrite
+    retry:
+      attempts: 3
+      per_try_timeout: "2s"
+      conditions:
+        - by_status_code: "500-599"
+        - by_header:
+            name: "grpc-status"
+            value: "14"
+    metadata:
+      cache: "true"
 
-  - path: /v1/products/*
-    timeout: 1s
-    protocol: HTTP
-    backends:
-      - target: 'discovery:///ecommerce-product-v1'
-    middlewares:
-      - name: circuitbreaker
-        options:
-          '@type': type.googleapis.com/gateway.middleware.circuitbreaker.v1.CircuitBreaker
-          successRatio: { "success": 0.6, "request": "1", "bucket": "10", "window": "3s" }
-          backupService: { "endpoint": { "backends": [ { "target": "127.0.0.1:8001" } ] } }
-          assertCondtions:
-            - { "by_status_code": "200" }
-      - name: rewrite
-        options:
-          '@type': type.googleapis.com/gateway.middleware.rewrite.v1.Rewrite
-
-  # 分类微服务
-  - path: /v1/categories
+  - path: /v1/categories*
     timeout: 1s
     protocol: HTTP
     backends:
       - target: 'discovery:///ecommerce-category-v1'
-    middlewares:
-      - name: circuitbreaker
-        options:
-          '@type': type.googleapis.com/gateway.middleware.circuitbreaker.v1.CircuitBreaker
-          successRatio: { "success": 0.6, "request": "1", "bucket": "10", "window": "3s" }
-          backupService: { "endpoint": { "backends": [ { "target": "127.0.0.1:8001" } ] } }
-          assertCondtions:
-            - { "by_status_code": "200" }
-      - name: rewrite
-        options:
-          '@type': type.googleapis.com/gateway.middleware.rewrite.v1.Rewrite
+    retry:
+      attempts: 3
+      per_try_timeout: "2s"
+      conditions:
+        - by_status_code: "500-599"
+        - by_header:
+            name: "grpc-status"
+            value: "14"
+    metadata:
+      cache: "true"
 
-  - path: /v1/categories/*
+  - path: /v1/orders*
     timeout: 1s
     protocol: HTTP
     backends:
-      - target: 'discovery:///ecommerce-category-v1'
-    middlewares:
-      - name: circuitbreaker
-        options:
-          '@type': type.googleapis.com/gateway.middleware.circuitbreaker.v1.CircuitBreaker
-          successRatio: { "success": 0.6, "request": "1", "bucket": "10", "window": "3s" }
-          backupService: { "endpoint": { "backends": [ { "target": "127.0.0.1:8001" } ] } }
-          assertCondtions:
-            - { "by_status_code": "200" }
-      - name: rewrite
-        options:
-          '@type': type.googleapis.com/gateway.middleware.rewrite.v1.Rewrite
+      - target: 'discovery:///ecommerce-order-v1'
+    retry:
+      attempts: 3
+      per_try_timeout: "2s"
+      conditions:
+        - by_status_code: "500-599"
+        - by_header:
+            name: "grpc-status"
+            value: "14"
+    metadata:
+      cache: "true"
