@@ -4,17 +4,18 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/go-kratos/gateway/discovery"
+	"github.com/go-kratos/gateway/middleware"
 	"github.com/go-kratos/gateway/proxy/auth"
-	"github.com/go-kratos/gateway/proxy/auth/authN"
 	"net/http"
 	"os"
+
 	"time"
 
 	"github.com/go-kratos/gateway/client"
 	"github.com/go-kratos/gateway/config"
 	configLoader "github.com/go-kratos/gateway/config/config-loader"
-	"github.com/go-kratos/gateway/discovery"
-	"github.com/go-kratos/gateway/middleware"
+
 	"github.com/go-kratos/gateway/proxy"
 	"github.com/go-kratos/gateway/proxy/debug"
 	"github.com/go-kratos/gateway/server"
@@ -27,6 +28,7 @@ import (
 	_ "github.com/go-kratos/gateway/middleware/cors"
 	_ "github.com/go-kratos/gateway/middleware/jwt"
 	_ "github.com/go-kratos/gateway/middleware/logging"
+	_ "github.com/go-kratos/gateway/middleware/rbac"
 	_ "github.com/go-kratos/gateway/middleware/rewrite"
 	_ "github.com/go-kratos/gateway/middleware/tracing"
 	_ "github.com/go-kratos/gateway/middleware/transcoder"
@@ -78,8 +80,8 @@ func init() {
 	flag.StringVar(&priorityConfigDir, "conf.priority", "", "priority config directory, eg: -conf.priority ./canary")
 	flag.StringVar(&ctrlName, "ctrl.name", os.Getenv("ADVERTISE_NAME"), "control gateway name, eg: gateway")
 	flag.StringVar(&ctrlService, "ctrl.service", "", "control service host, eg: http://127.0.0.1:8000")
-	// flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://99.suyiiyii.top:3026", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
-	flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://159.75.231.54:8500", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
+	flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://99.suyiiyii.top:3026", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
+	// flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://159.75.231.54:8500", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
 }
 
 func makeDiscovery() registry.Discovery {
@@ -92,6 +94,8 @@ func makeDiscovery() registry.Discovery {
 	}
 	return d
 }
+
+// 在main函数前添加以下中间件实现
 
 func main() {
 	// 解析 命令行选项及参数
@@ -160,9 +164,7 @@ func main() {
 		}
 		serverHandler = debug.MashupWithDebugHandler(p)
 	}
-	// 添加认证处理器
-	auth.Registry("/login", authN.LoginHandler)
-	auth.Registry("/reg", authN.RegHandler)
+
 	serverHandler = auth.Handler(serverHandler)
 	servers := make([]transport.Server, 0, len(proxyAddrs.Get()))
 	for _, addr := range proxyAddrs.Get() {

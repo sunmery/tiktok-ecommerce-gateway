@@ -50,10 +50,14 @@ func Handler(origin http.Handler) http.Handler {
 }
 
 type User struct {
-	Owner                string
-	Name                 string
-	ID                   string
-	Type                 string
-	Email                string
-	jwt.RegisteredClaims // v5版本新加的方法
+	Owner                string // 用户所在的组织
+	ID                   string // 用户 ID
+	Email                string // 用户邮箱
+	IsDeleted            bool   // 用户是否注销 bool
+	Avatar               string // 用户头像 string
+	CreatedTime          string // time.Time
+	UpdatedTime          string // time.Time
+	DeletedTime          string // time.Time
+	DisplayName          string // 要显示的用户名
+	jwt.RegisteredClaims        // v5版本新加的方法
 }

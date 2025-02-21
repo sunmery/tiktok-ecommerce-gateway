@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/casbin/casbin/v2 v2.98.0
-	github.com/casbin/mongodb-adapter/v3 v3.7.0
+	github.com/casbin/redis-adapter/v3 v3.5.0
 	github.com/go-kratos/aegis v0.2.1-0.20230616030432-99110a3f05f4
 	github.com/go-kratos/feature v0.0.0-20230724160043-79ea0633def6
 	github.com/go-kratos/kratos/contrib/registry/consul/v2 v2.0.0-20220318065833-e66a2905ab70
@@ -43,6 +43,7 @@ require (
 	github.com/go-playground/form/v4 v4.2.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
+	github.com/gomodule/redigo v1.8.9 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
 	github.com/hashicorp/go-hclog v0.12.0 // indirect

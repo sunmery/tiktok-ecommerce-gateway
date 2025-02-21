@@ -2,6 +2,7 @@ package cors
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -43,6 +44,8 @@ const (
 )
 
 func init() {
+	// 注册CORS中间件
+	fmt.Println("cors init")
 	middleware.Register("cors", Middleware)
 }
 
