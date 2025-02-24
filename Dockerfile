@@ -52,7 +52,6 @@ ARG UID=10001
 
 # 后端程序的HTTP/gRPC端口
 ARG GATEWAY_PORT=8080
-ARG HTTP_PORT=7070
 
 # 修改镜像源
 # RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
@@ -73,10 +72,8 @@ ARG HTTP_PORT=7070
 
 # 指定容器对外暴露的端口号
 EXPOSE $GATEWAY_PORT
-EXPOSE $HTTP_PORT
 
 RUN mkdir -p /data/conf
-
 
 # 设置容器启动时执行的命令
 CMD ["./gateway", "-conf", "/data/conf"]
@@ -89,19 +86,18 @@ CMD ["./gateway", "-conf", "/data/conf"]
 # 所以在使用docker构建时的目标平台的GOOS应该为 linux，而非 darwin。
 # docker build . \
 #   --progress=plain \
-#   -t dev/app:dev \
+#   -t ecommerce/gateway:dev \
 #   --build-arg CGOENABLED=0 \
 #   --build-arg GOIMAGE=golang:1.23.3-alpine3.20 \
 #   --build-arg GOOS=linux \
-#   --build-arg GOARCH=arm64 \
+#   --build-arg GOARCH=amd64 \
 #   --build-arg VERSION=$VERSION \
-#   --build-arg HTTP_PORT=30001 \
-#   --build-arg GRPC_PORT=30002
+#   --build-arg GATEWAY_PORT=8080
 
 # 构建多架构的二进制文件, 需要在Docker Desktop 启用 containerd 映像存储
 # https://docs.docker.com/desktop/containerd/#enable-the-containerd-image-store
 # VERSION=v1.0.0
-# REPOSITORY="tiktok/users"
+# REPOSITORY="ecommerce/gateway"
 # GOOS=linux
 # GOARCH=amd64
 # HTTP_PORT=30001
@@ -134,8 +130,5 @@ CMD ["./gateway", "-conf", "/data/conf"]
 # 运行
 # docker run \
 # --rm \
-# -p 30001:30001 \
-# -p 30002:30002 \
-# -e GIN_MODE=release \
-# -e DB_SOURCE="postgresql://postgres:postgres@localhost:5432/simple_bank?sslmode=disable" \
-# $REPOSITORY:$VERSION /bin/gateway -conf /bin/configs
+# -p 8080:8080 \
+

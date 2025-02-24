@@ -88,34 +88,65 @@ endpoints:
     metadata:
       cache: "true"
 
-#  - path: /v1/categories*
-#    timeout: 1s
-#    protocol: HTTP
-#    backends:
-#      - target: 'discovery:///ecommerce-category-v1'
-#    retry:
-#      attempts: 3
-#      per_try_timeout: "7s"
-#      conditions:
-#        - by_status_code: "500-599"
-#        - by_header:
-#            name: "grpc-status"
-#            value: "14"
+  - path: /v1/categories*
+    timeout: 1s
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-category-v1'
+    retry:
+      attempts: 3
+      per_try_timeout: "7s"
+      conditions:
+        - by_status_code: "500-599"
+        - by_header:
+            name: "grpc-status"
+            value: "14"
+    metadata:
+      cache: "true"
+
+  - path: /v1/orders*
+    timeout: 1s
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-order-v1'
+    retry:
+      attempts: 3
+      per_try_timeout: "7s"
+      conditions:
+        - by_status_code: "500-599"
+        - by_header:
+            name: "grpc-status"
+            value: "14"
+
+  - path: /v1/payments*
+    timeout: 1s
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-payment-v1'
+    retry:
+      attempts: 3
+      per_try_timeout: "7s"
+      conditions:
+        - by_status_code: "500-599"
+        - by_header:
+            name: "grpc-status"
+            value: "14"
+
 #    metadata:
 #      cache: "true"
-#
-#  - path: /v1/orders*
+
+#  - path: /api.order.v1.OrderService
+#    method: POST
 #    timeout: 1s
-#    protocol: HTTP
+#    protocol: GRPC
 #    backends:
+#      # - target: '127.0.0.1:9000'
 #      - target: 'discovery:///ecommerce-order-v1'
 #    retry:
 #      attempts: 3
-#      per_try_timeout: "7s"
+#      perTryTimeout: 0.1s
 #      conditions:
-#        - by_status_code: "500-599"
-#        - by_header:
-#            name: "grpc-status"
-#            value: "14"
-#    metadata:
-#      cache: "true"
+#        - byStatusCode: '502-504'
+#        - byHeader:
+#            name: 'Grpc-Status'
+#            value: '14'

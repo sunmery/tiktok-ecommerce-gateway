@@ -1,19 +1,24 @@
 services:
 
-  ecommerce-gateway:
-    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.0.2
+  gateway:
+    image: ccr.ccs.tencentyun.com/kratos/gateway:dev
     platform: linux/amd64
-    network_mode: host
+    #network_mode: host
     ports:
-      - "8080:8080"
+      - "3015:8080"
     container_name: ecommerce-gateway
-    restart: always
+    restart: on-failure:3
     volumes:
-      - ./cmd/gateway/config.yaml:/data/conf/config.yaml
+      - ./config.yaml:/app/configs/config.yaml
+      - ./public.pem:/app/public.pem
     command:
       - "/app/gateway"
       - "-conf"
       - "/app/configs/config.yaml"
 
-# docker cp config.yaml ecommerce-gateway:/app/configs/config.yaml
-# docker compose restart
+  # 将本地的 config.yaml 映射到容器中的 /app/configs/config.yaml
+  # docker cp config.yaml ecommerce-gateway:/app/configs/config.yaml
+
+  # 将证书 映射到容器中的 /app/configs/config.yaml
+  # docker cp public.pem ecommerce-gateway:/app/
+  # docker compose restart
