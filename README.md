@@ -13,7 +13,54 @@ kratos run
 ```
 
 ## 编写自定义中间件
-1. 编写中间件代码
+1. 创建一个目录: ./middleware/routerfilter
+2. 创建一个文件: ./middleware/routerfilter/routerfilter.go
+3. 如果需要配置: : /api/gateway/middleware/routerfilter/routerfilter.proto
+4. 实现接口
+```go
+package routerfilter
+
+import "github.com/go-kratos/gateway/middleware"
+
+func Middleware(c *config.Middleware) (middleware.Middleware, error) {
+	return func(next http.RoundTripper) http.RoundTripper {
+		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			// 在这里编写中间件逻辑
+			// ...
+			
+			// 执行到这里时就意味着中间件已经执行完毕, 根据./cmd/gateway/config.yaml的中间件顺序继续执行下一个中间件
+			return next.RoundTrip(req)
+		}
+	}
+}
+```
+
+1. 当你需要提供给其他中间件或者全局使用时, 可以在`./api/gateway/config/v1/gateway.proto`配置通用的配置,然后在`func Middleware(c *config.Middleware) (middleware.Middleware, error) {} `使用`c.XXX` 来获取配置
+2. 当你只需要你自身的配置的时候, 在`./api/gateway/middleware/` 创建, 例如 `routerfilter/v1/routerfilter.proto` 文件, 通过生成出的pb包来使用, 例如
+```go
+import v1 "github.com/go-kratos/gateway/api/gateway/middleware/routerfilter/v1"
+
+options := &v1.RouterFilter{}`
+````
+
+5. 注册:
+```go
+package routerfilter
+func init() {
+	prometheus.MustRegister(requestsTotal, requestDuration)
+	middleware.Register("router_filter", Middleware)
+	fmt.Println("RouterFilter middleware initialized")
+}
+
+```
+
+6. 添加中间件到主进程
+```go
+package main
+import (
+  _ "github.com/go-kratos/gateway/middleware/routerfilter" // 过滤中间件
+)
+```
 
 ## Protocol
 * HTTP -> HTTP  
