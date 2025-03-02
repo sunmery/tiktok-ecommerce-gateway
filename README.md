@@ -27,3 +27,26 @@ HTTP -> Proxy -> Router -> Middleware -> Client -> Selector -> Node
 * metrics
 * ratelimit
 * datacenter
+
+### CORS
+
+前端一般都要包含如下请求头:
+```yaml
+allowHeaders:
+  - Authorization
+  - Content-Type
+  - X-Requested-With
+  - DNT
+  - Sec-Fetch-Dest
+  - Sec-Fetch-Mode
+  - Sec-Fetch-Site
+
+```
+站点规则如下:
+请求来源	配置项	是否允许
+- http://a.localhost:3000	.localhost	✅
+- http://localhost:8080	.localhost	✅
+- http://x.y.localhost	*.localhost	✅
+- http://evil.localhost.com	.localhost	❌
+- http://127.0.0.1:3000	127.0.0.1:3000	✅
+如果需要修改, 可以修改`middleware/cors/cors.go`中的代码的`isOriginAllowed` 函数

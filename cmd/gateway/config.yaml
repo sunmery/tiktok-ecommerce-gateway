@@ -2,35 +2,42 @@
 name: gateway
 version: v1
 middlewares:
-  - name: tracing
-    options:
-      '@type': type.googleapis.com/gateway.middleware.tracing.v1.Tracing
-      httpEndpoint: '99.suyiiyii.top:3003' # default opentelemetry collector port
-      insecure: true # http方式
-  - name: "auth"
-    options:
-      "@type": "type.googleapis.com/google.protobuf.StringValue"
-      value: "token"
-    required: true
+  # 前端跨域选项
   - name: cors
-  - name: transcoder
-  - name: logging
-  - name: jwt
-  - name: rbac
     options:
       '@type': type.googleapis.com/gateway.middleware.cors.v1.Cors
       allowCredentials: true
+      allowHeaders:
+        - Authorization
+        - Content-Type
+        - X-Requested-With
+        - DNT
+        - Sec-Fetch-Dest
+        - Sec-Fetch-Mode
+        - Sec-Fetch-Site
+
       allowOrigins:
-        - http://localhost:3000
-        - http://localhost:443
+#        - localhost:3000
+        - .localhost
         - .apikv.com
       allowMethods:
+        - OPTIONS
         - GET
         - POST
         - PUT
         - PATCH
         - DELETE
-        - OPTIONS
+  - name: logging
+  - name: tracing
+    options:
+      '@type': type.googleapis.com/gateway.middleware.tracing.v1.Tracing
+      httpEndpoint: '99.suyiiyii.top:3003' # default opentelemetry collector port
+      insecure: true # http方式
+  - name: transcoder
+    #处理JWT
+  - name: jwt
+    # 基于用户的接口权限控制
+  - name: rbac
 
 endpoints:
 
@@ -69,8 +76,6 @@ endpoints:
         - by_header:
             name: "grpc-status"
             value: "14"
-    metadata:
-      cache: "true"
 
   - path: /v1/products*
     timeout: 1s
@@ -104,33 +109,33 @@ endpoints:
     metadata:
       cache: "true"
 
-  - path: /v1/orders*
-    timeout: 1s
-    protocol: HTTP
-    backends:
-      - target: 'discovery:///ecommerce-order-v1'
-    retry:
-      attempts: 3
-      per_try_timeout: "7s"
-      conditions:
-        - by_status_code: "500-599"
-        - by_header:
-            name: "grpc-status"
-            value: "14"
-
-  - path: /v1/payments*
-    timeout: 1s
-    protocol: HTTP
-    backends:
-      - target: 'discovery:///ecommerce-payment-v1'
-    retry:
-      attempts: 3
-      per_try_timeout: "7s"
-      conditions:
-        - by_status_code: "500-599"
-        - by_header:
-            name: "grpc-status"
-            value: "14"
+#  - path: /v1/orders*
+#    timeout: 1s
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-order-v1'
+#    retry:
+#      attempts: 3
+#      per_try_timeout: "7s"
+#      conditions:
+#        - by_status_code: "500-599"
+#        - by_header:
+#            name: "grpc-status"
+#            value: "14"
+#
+#  - path: /v1/payments*
+#    timeout: 1s
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-payment-v1'
+#    retry:
+#      attempts: 3
+#      per_try_timeout: "7s"
+#      conditions:
+#        - by_status_code: "500-599"
+#        - by_header:
+#            name: "grpc-status"
+#            value: "14"
 
 #    metadata:
 #      cache: "true"

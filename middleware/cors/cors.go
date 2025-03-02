@@ -3,7 +3,10 @@ package cors
 import (
 	"bytes"
 	"fmt"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,14 +16,12 @@ import (
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
 	v1 "github.com/go-kratos/gateway/api/gateway/middleware/cors/v1"
 	"github.com/go-kratos/gateway/middleware"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 var (
 	defaultAllowCredentials    = true
-	defaultAllowPrivateNetwork = false
+	defaultAllowPrivateNetwork = true
 	defaultCorsMethods         = []string{"GET", "POST", "PUT", "DELETE"}
 	defaultCorsHeaders         = []string{"Origin", "Content-Length", "Content-Type"}
 	// (WebKit/Safari v9 sends the Origin header by default in AJAX requests)
@@ -44,9 +45,9 @@ const (
 )
 
 func init() {
-	// 注册CORS中间件
-	fmt.Println("cors init")
 	middleware.Register("cors", Middleware)
+	// 注册CORS中间件
+	fmt.Println("CORS中间件 初始化")
 }
 
 func isOriginAllowed(origin string, allowOriginHosts []string) bool {
@@ -54,21 +55,77 @@ func isOriginAllowed(origin string, allowOriginHosts []string) bool {
 	if err != nil {
 		return false
 	}
-	hostname := strings.ToLower(originURL.Hostname())
+	hostname := strings.ToLower(originURL.Hostname()) // 获取不含端口的主机名
+
 	for _, host := range allowOriginHosts {
 		host = strings.ToLower(host)
-		if host[0] != '*' {
-			if hostname == host {
+		if host == "*" {
+			return true
+		}
+
+		// 处理通配符场景（支持 *.localhost 和 .localhost 两种写法）
+		if strings.HasPrefix(host, "*.") || strings.HasPrefix(host, ".") {
+			// 统一处理为后缀匹配
+			suffix := strings.TrimPrefix(host, "*") // 将 *.localhost 和 .localhost 都转为 .localhost
+			if suffix == "" {
+				continue // 避免无效配置如 "*."
+			}
+			// 匹配子域名（如 a.localhost、b.a.localhost）
+			if strings.HasSuffix(hostname, suffix) {
 				return true
 			}
-			continue
-		}
-		if strings.HasSuffix(hostname, strings.TrimPrefix(host, "*")) {
-			return true
+			// 特殊处理：当配置为 .localhost 时，允许裸域名 localhost（可选）
+			if suffix == ".localhost" && hostname == "localhost" {
+				return true
+			}
+		} else {
+			// 处理精确匹配（含端口）
+			configuredHost, configuredPort, _ := net.SplitHostPort(host)
+			if configuredHost == "" {
+				configuredHost = host // 配置未指定端口
+			}
+			// 获取请求的实际端口
+			requestPort := originURL.Port()
+			// 主机名+端口双匹配
+			if configuredHost == hostname && (configuredPort == "" || configuredPort == requestPort) {
+				return true
+			}
 		}
 	}
 	return false
 }
+
+// func isOriginAllowed(origin string, allowOriginHosts []string) bool {
+// 	originURL, err := url.Parse(origin)
+// 	if err != nil {
+// 		return false
+// 	}
+// 	hostWithPort := strings.ToLower(originURL.Host) // 获取包含端口的host
+//
+// 	for _, host := range allowOriginHosts {
+// 		host = strings.ToLower(host)
+// 		if host == "*" {
+// 			return true
+// 		}
+// 		if strings.HasPrefix(host, ".") {
+// 			// 处理通配符子域名，如 *.example.com
+// 			suffix := strings.TrimPrefix(host, "*")
+// 			if strings.HasSuffix(hostWithPort, suffix) {
+// 				return true
+// 			}
+// 		} else {
+// 			// 直接匹配完整host或允许特定端口
+// 			if hostWithPort == host {
+// 				return true
+// 			}
+// 			// 额外处理：若配置中没有端口，则匹配任意端口（可选）
+// 			if strings.Split(hostWithPort, ":")[0] == host {
+// 				return true
+// 			}
+// 		}
+// 	}
+// 	return false
+// }
 
 func newResponse(statusCode int, header http.Header) (*http.Response, error) {
 	return &http.Response{
@@ -101,9 +158,11 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 				// not a cors request
 				return next.RoundTrip(req)
 			}
+
 			if !isOriginAllowed(origin, options.AllowOrigins) {
 				return newResponse(http.StatusForbidden, http.Header{})
 			}
+
 			if req.Method == corsOptionMethod {
 				headers := make(http.Header, len(preflightHeaders)+2)
 				if options.AllowPrivateNetwork && req.Header.Get(corsRequestPrivateNetwork) == "true" {
@@ -172,6 +231,7 @@ func generatePreflightHeaders(c *v1.Cors) http.Header {
 	headers.Add(corsVaryHeader, corsOriginHeader)
 	headers.Add(corsVaryHeader, corsRequestMethodHeader)
 	headers.Add(corsVaryHeader, corsRequestHeadersHeader)
+
 	return headers
 }
 

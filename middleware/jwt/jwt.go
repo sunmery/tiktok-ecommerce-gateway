@@ -19,12 +19,12 @@ import (
 var (
 	NotAuthN      = errors.New("unauthorized: authentication required")
 	publicKey     *rsa.PublicKey
-	publicKeyPath = "public.pem" // 证书文件路径
+	publicKeyPath =os.Getenv("JWT_PUBKEY_PATH") // 证书文件路径
 )
 
-// 初始化时加载证书
 func init() {
 	middleware.Register("jwt", Middleware)
+// 初始化时加载证书
 	loadPublicKey()
 }
 
@@ -63,7 +63,7 @@ func ParseJwt(tokenString string) (*CustomClaims, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, errors.New("令牌解析失败")
 	}
 
 	if claims, ok := t.Claims.(*CustomClaims); ok && t.Valid {
@@ -73,12 +73,22 @@ func ParseJwt(tokenString string) (*CustomClaims, error) {
 }
 
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
-	fmt.Println("JWT 中间件初始化")
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			fmt.Println("JWT 中间件初始化")
+			log.Infof("Processing request: %s %s", req.Method, req.URL.Path)
+
 			// 跳过认证的路径
 			if req.URL.Path == "/v1/auth" && req.Method == "POST" {
+				return next.RoundTrip(req)
+			}
+			// TODO
+			if req.URL.Path == "/v1/products" && req.Method == "GET" {
+				return next.RoundTrip(req)
+			}
+			if req.URL.Path == "/v1/payments/notify" && req.Method == "POST" {
+				return next.RoundTrip(req)
+			}
+			if req.URL.Path == "/v1/payments/callback" && req.Method == "POST" {
 				return next.RoundTrip(req)
 			}
 
@@ -96,7 +106,7 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 
 			// 传递到下游服务
 			req.Header.Set("x-md-global-user-id", claims.ID)
-			// req.Header.Set("x-md-global-role", claims.Type)
+			req.Header.Set("x-md-global-user-owner", claims.Owner)
 
 			return next.RoundTrip(req)
 		})

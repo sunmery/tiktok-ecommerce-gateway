@@ -1,15 +1,16 @@
 package rbac
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/casbin/casbin/v2"
+	redisadapter "github.com/casbin/redis-adapter/v3"
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
 	"github.com/go-kratos/gateway/middleware"
 )
@@ -17,12 +18,102 @@ import (
 var (
 	NotAuthZ             = errors.New("权限不足")
 	syncedCachedEnforcer *casbin.SyncedCachedEnforcer
-	cache                = NewCache(5*time.Minute, 10*time.Minute) // 新增缓存
+	cache                = NewCache(5*time.Minute, 10*time.Minute)
+	casdoorAPI           = os.Getenv("casdoor_endpoint")
+	RedisAddr            = os.Getenv("redis_addr") // localhost:6379
+	// userOwner        = os.Getenv("CASDOOR_ORG")
+	userOwner      = "tiktok"
+	userIdMetadataKey = "x-md-global-user-id"
 )
 
-// Cache 新增缓存结构
+// RoleType Casdoor角色字段
+type RoleType struct {
+	Owner       string        `json:"owner"`
+	Name        string        `json:"name"`
+	CreatedTime time.Time     `json:"createdTime"`
+	DisplayName string        `json:"displayName"`
+	Description string        `json:"description"`
+	Users       interface{}   `json:"users"`
+	Groups      []interface{} `json:"groups"`
+	Roles       []interface{} `json:"roles"`
+	Domains     []interface{} `json:"domains"`
+	IsEnabled   bool          `json:"isEnabled"`
+}
+
+func init() {
+	middleware.Register("rbac", Middleware)
+	initEnforcer()
+}
+
+// 初始化策略
+func initPolicies(e *casbin.SyncedCachedEnforcer) {
+	policies := [][]string{
+		// 公共接口 (不需要登录)
+		{"public", "/v1/auth", "POST", "allow"},
+
+		// 普通用户权限
+		{"user", "/v1/auth/profile", "GET", "allow"},
+		{"user", "/v1/products", "GET", "allow"},
+		{"user", "/v1/users/*", "(GET|POST|PATCH|DELETE)", "allow"},
+		{"user", "/v1/cart*", "(GET|POST|DELETE)", "allow"},
+		{"user", "/v1/checkout", "POST", "allow"},
+		{"user", "/v1/order", "(GET|POST)", "allow"},
+
+		// 商家特殊权限
+		{"merchant", "/v1/products*", "(POST|PUT|DELETE)", "allow"},
+		{"merchant", "/v1/products/*/submit-audit", "POST", "allow"},
+
+		// 管理员专属权限
+		{"admin", "/v1/categories*", "(POST|PUT|DELETE|PATCH)", "allow"},
+		{"admin", "/v1/products/*/audit", "POST", "allow"},
+		{"admin", "/v1/order/*/paid", "POST", "allow"},
+
+		// 拒绝所有未明确允许的请求（默认拒绝）
+		{"anyone", "/*", ".*", "deny"},
+	}
+
+	// 添加角色继承关系
+	groupPolicies := [][]string{
+		{"merchant", "user"},  // 商家继承普通用户
+		{"admin", "merchant"}, // 管理员继承商家
+	}
+
+	// 添加普通策略
+	for _, policy := range policies {
+		if ok, _ := e.AddPolicy(policy); !ok {
+			fmt.Printf("Policy %v already exists\n", policy)
+		}
+	}
+
+	// 添加角色继承关系
+	for _, policy := range groupPolicies {
+		if ok, _ := e.AddGroupingPolicy(policy); !ok {
+			fmt.Printf("Grouping policy %v already exists\n", policy)
+		}
+	}
+}
+
+// 初始化Casbin Enforcer
+func initEnforcer() {
+	a, err := redisadapter.NewAdapter("tcp", RedisAddr)
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize redis adapter: %v", err))
+	}
+
+	enforcer, err := casbin.NewSyncedCachedEnforcer("./rbac_model.conf", a)
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize enforcer: %v", err))
+	}
+	syncedCachedEnforcer = enforcer
+
+	// 初始化策略
+	initPolicies(enforcer)
+}
+
+// Cache 结构（带线程安全）
 type Cache struct {
 	items    map[string]cacheItem
+	mu       sync.RWMutex
 	janitor  *cacheJanitor
 	stopChan chan struct{}
 }
@@ -32,129 +123,6 @@ type cacheItem struct {
 	expiration int64
 }
 
-// 新增配置参数（建议从环境变量读取）
-var (
-	casdoorAPI = os.Getenv("CASDOOR_ADDR") // http://casdoor.com:8000
-	// casdoorOwner = os.Getenv("CASDOOR_OWNER") // owner
-	casdoorOwner = "tiktok" // owner
-
-	// 需要传递的 metadata:
-	// userIdMetadataKey = os.Getenv("USER_ID_METADATA_KEY") // x-md-global-user-id
-	userIdMetadataKey = "x-md-global-user-id"
-)
-
-type RBAC struct {
-	enforcer *casbin.SyncedCachedEnforcer
-	// logger   log.Logger
-}
-
-func (r *RBAC) Middleware(c *config.Middleware) (middleware.Middleware, error) {
-	return func(next http.RoundTripper) http.RoundTripper {
-		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			// 跳过认证接口
-			if req.URL.Path == "/v1/auth" && req.Method == http.MethodPost {
-				return next.RoundTrip(req)
-			}
-
-			// 1. 从Header获取用户ID
-			userID := req.Header.Get(userIdMetadataKey)
-			if userID == "" {
-				return nil, fmt.Errorf("%w: 缺少用户标识", NotAuthZ)
-			}
-
-			// 2. 获取用户角色（带缓存）
-			roles, err := r.getUserRoles(userID)
-			if err != nil {
-				// r.logger.Errorf("获取角色失败: user=%s error=%v", userID, err)
-				return nil, fmt.Errorf("%w: 无法验证权限", NotAuthZ)
-			}
-
-			// 3. 执行权限检查
-			for _, role := range roles {
-				allowed, err := r.enforcer.Enforce(role, req.URL.Path, req.Method)
-				if err != nil {
-					// r.logger.Warnf("权限检查错误: role=%s path=%s method=%s error=%v",
-					// 	role, req.URL.Path, req.Method, err)
-					fmt.Printf("权限检查错误: role=%s path=%s method=%s error=%v",
-						role, req.URL.Path, req.Method, err)
-					continue
-				}
-
-				if allowed {
-					// 传递角色到上下文
-					ctx := context.WithValue(req.Context(), "current_roles", roles)
-					return next.RoundTrip(req.WithContext(ctx))
-				}
-			}
-
-			return nil, fmt.Errorf("%w: 角色%v无%s %s权限",
-				NotAuthZ, roles, req.Method, req.URL.Path)
-		})
-	}, nil
-}
-
-// 新增：带缓存的角色获取方法
-func (r *RBAC) getUserRoles(userID string) ([]string, error) {
-	// 检查缓存
-	if cached, found := cache.Get(userID); found {
-		return cached.([]string), nil
-	}
-
-	// 调用Casdoor API
-	roles, err := fetchRolesFromCasdoor(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 更新缓存
-	cache.Set(userID, roles)
-	return roles, nil
-}
-
-// 新增：Casdoor接口调用逻辑
-func fetchRolesFromCasdoor(userID string) ([]string, error) {
-	// 构造请求
-	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/get-roles", casdoorAPI), nil)
-	q := req.URL.Query()
-	q.Add("owner", casdoorOwner)
-	req.URL.RawQuery = q.Encode()
-
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("casdoor接口调用失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// 解析响应
-	var result struct {
-		Data []struct {
-			Name  string   `json:"name"`
-			Users []string `json:"users"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("响应解析失败: %w", err)
-	}
-
-	// 匹配用户角色
-	var roles []string
-	for _, group := range result.Data {
-		for _, u := range group.Users {
-			if u == userID {
-				roles = append(roles, group.Name)
-				break
-			}
-		}
-	}
-
-	if len(roles) == 0 {
-		return nil, fmt.Errorf("用户未分配角色")
-	}
-	return roles, nil
-}
-
-// NewCache 新增缓存实现
 func NewCache(defaultExpiration, cleanupInterval time.Duration) *Cache {
 	c := &Cache{
 		items:    make(map[string]cacheItem),
@@ -171,6 +139,8 @@ func NewCache(defaultExpiration, cleanupInterval time.Duration) *Cache {
 }
 
 func (c *Cache) Get(key string) (interface{}, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	item, exists := c.items[key]
 	if !exists || time.Now().UnixNano() > item.expiration {
 		return nil, false
@@ -179,10 +149,120 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 }
 
 func (c *Cache) Set(key string, value interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.items[key] = cacheItem{
 		value:      value,
 		expiration: time.Now().Add(5 * time.Minute).UnixNano(),
 	}
+}
+
+// Middleware 中间件实现
+func Middleware(c *config.Middleware) (middleware.Middleware, error) {
+	return func(next http.RoundTripper) http.RoundTripper {
+		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			// 跳过认证接口
+			if req.URL.Path == "/v1/auth" && req.Method == http.MethodPost {
+				return next.RoundTrip(req)
+			}
+			// TODO
+			if req.URL.Path == "/v1/products" && req.Method == "GET" {
+				return next.RoundTrip(req)
+			}
+
+			// 1. 获取用户ID
+			userID := req.Header.Get(userIdMetadataKey)
+			if userID == "" {
+				return nil, fmt.Errorf("%w: 缺少用户标识", NotAuthZ)
+			}
+
+			// 2. 获取用户角色
+			role, err := getUserRoles(userID)
+			if err != nil {
+				return nil, fmt.Errorf("%w: 无法验证权限", err)
+			}
+
+			fmt.Printf("用户角色: %s\n", role)
+			fmt.Printf("用户ID: %s\n", userID)
+			// 3. 权限检查
+			allowed, err := syncedCachedEnforcer.Enforce(role, req.URL.Path, req.Method)
+			if err != nil {
+				fmt.Printf("权限检查错误: role=%s path=%s method=%s error=%v\n",
+					role, req.URL.Path, req.Method, err)
+
+			}
+
+			// 设置下游元数据
+			if allowed {
+				req.Header.Set("x-md-global-role", role)
+				req.Header.Set("x-md-global-owner", userOwner)
+				req.Header.Set("x-md-global-user-id", userID)
+				return next.RoundTrip(req)
+			}
+
+			return nil, fmt.Errorf("%w: 角色%v无%s %s权限",
+				NotAuthZ, role, req.Method, req.URL.Path)
+		})
+	}, nil
+}
+
+// 获取用户角色（带缓存）
+func getUserRoles(userID string) (string, error) {
+	// 检查缓存
+	if cached, found := cache.Get(userID); found {
+		return cached.(string), nil
+	}
+
+	// 调用Casdoor API
+	role, err := fetchRolesFromCasdoor(userID)
+	if err != nil {
+		return "", err
+	}
+
+	// 更新缓存
+	cache.Set(userID, role)
+	return role, nil
+}
+
+// Casdoor角色查询
+func fetchRolesFromCasdoor(userID string) (string, error) {
+	id := fmt.Sprintf("%s/%s", userOwner, userID)
+	// id = "tiktok/7ae63d43-493f-44b0-830e-6bf4064226a3"
+
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/get-user?id=%s&owner=%s", casdoorAPI, id, userOwner), nil)
+	q := req.URL.Query()
+	q.Add("owner", userOwner)
+	h := req.Header
+	h.Add("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("casdoor接口调用失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			Id    string     `json:"id"`
+			Roles []RoleType `json:"roles"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("响应解析失败: %w", err)
+	}
+
+	var role string
+	if userID == result.Data.Id {
+		for _, u := range result.Data.Roles {
+			role = u.Name
+			break
+		}
+	}
+	if role == "" {
+		return "", fmt.Errorf("用户未分配角色")
+	}
+	return role, nil
 }
 
 type cacheJanitor struct {
