@@ -1,8 +1,7 @@
 syntax = "proto3";
 
 package gateway.middleware.tracing.v1;
-
-option go_package = "github.com/go-kratos/gateway/api/gateway/middleware/tracing/v1";
+option go_package = "github.com/go-kratos/gateway/api/gateway/middleware/tracing/v1;v1";
 
 import "google/protobuf/duration.proto";
 

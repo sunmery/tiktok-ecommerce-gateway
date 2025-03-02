@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package gateway.middleware.jwt.v1;
+
+option go_package = "github.com/go-kratos/gateway/api/gateway/middleware/jwt/v1;v1";
+
+message Rule {
+  string path = 1;
+  repeated string methods = 2;
+}
+
+message RouterFilter {
+  repeated Rule rules = 1;
+}

@@ -38,6 +38,16 @@ message Middleware {
     string name = 1;
     google.protobuf.Any options = 2;
     bool required = 3;
+    message Rule {
+        string path = 1;
+        repeated string methods = 2;
+    }
+
+    message RouterFilter {
+        repeated Rule rules = 1;
+    }
+    RouterFilter router_filter = 4;
+
 }
 
 message Backend {
@@ -78,3 +88,4 @@ message Condition {
         header by_header = 2;
     }
 }
+

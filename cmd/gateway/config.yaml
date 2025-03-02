@@ -2,6 +2,7 @@
 name: gateway
 version: v1
 middlewares:
+
   # 前端跨域选项
   - name: cors
     options:
@@ -17,8 +18,9 @@ middlewares:
         - Sec-Fetch-Site
 
       allowOrigins:
-#        - localhost:3000
-        - .localhost
+        - http://localhost:3000
+        - localhost:3000
+#        - .localhost
         - .apikv.com
       allowMethods:
         - OPTIONS
@@ -34,10 +36,47 @@ middlewares:
       httpEndpoint: '99.suyiiyii.top:3003' # default opentelemetry collector port
       insecure: true # http方式
   - name: transcoder
-    #处理JWT
   - name: jwt
+    # 不需要鉴权的接口
+    router_filter:
+      rules:
+        - path: /v1/products
+          methods:
+            - GET
+            - OPTIONS
+        - path: /v1/auth
+          methods:
+            - OPTIONS
+            - POST
+        - path: /v1/payments/notify
+          methods:
+            - OPTIONS
+            - POST
+        - path: /v1/payments/callback
+          methods:
+            - OPTIONS
+            - POST
     # 基于用户的接口权限控制
   - name: rbac
+    # 不需要鉴权的接口
+    router_filter:
+      rules:
+        - path: /v1/products
+          methods:
+            - GET
+            - OPTIONS
+        - path: /v1/auth
+          methods:
+            - OPTIONS
+            - POST
+        - path: /v1/payments/notify
+          methods:
+            - OPTIONS
+            - POST
+        - path: /v1/payments/callback
+          methods:
+            - OPTIONS
+            - POST
 
 endpoints:
 

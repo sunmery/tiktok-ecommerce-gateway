@@ -73,23 +73,30 @@ func ParseJwt(tokenString string) (*CustomClaims, error) {
 }
 
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
+	var routerFilter *config.Middleware_RouterFilter
+	if c != nil && c.RouterFilter != nil {
+		routerFilter = c.RouterFilter
+	} else {
+		routerFilter = &config.Middleware_RouterFilter{} // 空配置
+	}
+
+	skipRules := make(map[string]map[string]bool)
+	for _, rule := range routerFilter.Rules { // 安全访问
+		methods := make(map[string]bool)
+		for _, m := range rule.Methods {
+			methods[strings.ToUpper(m)] = true
+		}
+		skipRules[rule.Path] = methods
+	}
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 			log.Infof("Processing request: %s %s", req.Method, req.URL.Path)
 
-			// 跳过认证的路径
-			if req.URL.Path == "/v1/auth" && req.Method == "POST" {
-				return next.RoundTrip(req)
-			}
-			// TODO
-			if req.URL.Path == "/v1/products" && req.Method == "GET" {
-				return next.RoundTrip(req)
-			}
-			if req.URL.Path == "/v1/payments/notify" && req.Method == "POST" {
-				return next.RoundTrip(req)
-			}
-			if req.URL.Path == "/v1/payments/callback" && req.Method == "POST" {
-				return next.RoundTrip(req)
+			// 动态路由跳过检查
+			if methods, ok := skipRules[req.URL.Path]; ok {
+				if methods[req.Method] {
+					return next.RoundTrip(req)
+				}
 			}
 
 			authHeader := req.Header.Get("Authorization")

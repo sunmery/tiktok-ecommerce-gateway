@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -156,18 +157,33 @@ func (c *Cache) Set(key string, value interface{}) {
 		expiration: time.Now().Add(5 * time.Minute).UnixNano(),
 	}
 }
-
+type JwtOptions struct {
+	SkipPaths []string `json:"skip_paths"`
+}
 // Middleware 中间件实现
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
+	var routerFilter *config.Middleware_RouterFilter
+	if c != nil && c.RouterFilter != nil {
+		routerFilter = c.RouterFilter
+	} else {
+		routerFilter = &config.Middleware_RouterFilter{} // 空配置
+	}
+
+	skipRules := make(map[string]map[string]bool)
+	for _, rule := range routerFilter.Rules { // 安全访问
+		methods := make(map[string]bool)
+		for _, m := range rule.Methods {
+			methods[strings.ToUpper(m)] = true
+		}
+		skipRules[rule.Path] = methods
+	}
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			// 跳过认证接口
-			if req.URL.Path == "/v1/auth" && req.Method == http.MethodPost {
-				return next.RoundTrip(req)
-			}
-			// TODO
-			if req.URL.Path == "/v1/products" && req.Method == "GET" {
-				return next.RoundTrip(req)
+			// 动态路由跳过检查
+			if methods, ok := skipRules[req.URL.Path]; ok {
+				if methods[req.Method] {
+					return next.RoundTrip(req)
+				}
 			}
 
 			// 1. 获取用户ID

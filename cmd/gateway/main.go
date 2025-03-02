@@ -22,16 +22,17 @@ import (
 
 	_ "net/http/pprof"
 
-	_ "github.com/go-kratos/gateway/discovery/consul"
-	_ "github.com/go-kratos/gateway/middleware/bbr"
-	"github.com/go-kratos/gateway/middleware/circuitbreaker"
-	_ "github.com/go-kratos/gateway/middleware/cors"
-	_ "github.com/go-kratos/gateway/middleware/jwt"
-	_ "github.com/go-kratos/gateway/middleware/logging"
-	_ "github.com/go-kratos/gateway/middleware/rbac"
-	_ "github.com/go-kratos/gateway/middleware/rewrite"
-	_ "github.com/go-kratos/gateway/middleware/tracing"
-	_ "github.com/go-kratos/gateway/middleware/transcoder"
+	_ "github.com/go-kratos/gateway/discovery/consul" // Consul服务发现
+	_ "github.com/go-kratos/gateway/middleware/bbr" // 负载均衡中间件
+	"github.com/go-kratos/gateway/middleware/circuitbreaker" // 熔断中间件
+	_ "github.com/go-kratos/gateway/middleware/cors" // CORS中间件
+	_ "github.com/go-kratos/gateway/middleware/jwt" // JWT中间件
+	_ "github.com/go-kratos/gateway/middleware/logging" // 日志中间件
+	_ "github.com/go-kratos/gateway/middleware/rbac" // 权限中间件
+	_ "github.com/go-kratos/gateway/middleware/rewrite" // 重写中间件
+	_ "github.com/go-kratos/gateway/middleware/routerfilter" // 过滤中间件
+	_ "github.com/go-kratos/gateway/middleware/tracing" // 链路追踪中间件
+	_ "github.com/go-kratos/gateway/middleware/transcoder" // 编解码中间件
 	_ "go.uber.org/automaxprocs"
 
 	"github.com/go-kratos/kratos/v2"
