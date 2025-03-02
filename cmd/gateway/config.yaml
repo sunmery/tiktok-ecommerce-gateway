@@ -16,11 +16,9 @@ middlewares:
         - Sec-Fetch-Dest
         - Sec-Fetch-Mode
         - Sec-Fetch-Site
-
       allowOrigins:
         - http://localhost:3000
         - localhost:3000
-#        - .localhost
         - .apikv.com
       allowMethods:
         - OPTIONS
@@ -40,6 +38,10 @@ middlewares:
     # 不需要鉴权的接口
     router_filter:
       rules:
+        - path: /v1/categories/*
+          methods:
+            - GET
+            - OPTIONS
         - path: /v1/products
           methods:
             - GET
@@ -61,6 +63,10 @@ middlewares:
     # 不需要鉴权的接口
     router_filter:
       rules:
+        - path: /v1/categories/*
+          methods:
+            - GET
+            - OPTIONS
         - path: /v1/products
           methods:
             - GET
@@ -116,21 +122,21 @@ endpoints:
             name: "grpc-status"
             value: "14"
 
-  - path: /v1/products*
-    timeout: 1s
-    protocol: HTTP
-    backends:
-      - target: 'discovery:///ecommerce-product-v1'
-    retry:
-      attempts: 3
-      per_try_timeout: "7s"
-      conditions:
-        - by_status_code: "500-599"
-        - by_header:
-            name: "grpc-status"
-            value: "14"
-    metadata:
-      cache: "true"
+#  - path: /v1/products*
+#    timeout: 1s
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-product-v1'
+#    retry:
+#      attempts: 3
+#      per_try_timeout: "7s"
+#      conditions:
+#        - by_status_code: "500-599"
+#        - by_header:
+#            name: "grpc-status"
+#            value: "14"
+#    metadata:
+#      cache: "true"
 
   - path: /v1/categories*
     timeout: 1s

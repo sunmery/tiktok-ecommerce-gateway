@@ -59,13 +59,15 @@ func initPolicies(e *casbin.SyncedCachedEnforcer) {
 		{"user", "/v1/cart*", "(GET|POST|DELETE)", "allow"},
 		{"user", "/v1/checkout", "POST", "allow"},
 		{"user", "/v1/order", "(GET|POST)", "allow"},
+		{"user", "/v1/categories/*", "GET", "allow"},
 
 		// 商家特殊权限
 		{"merchant", "/v1/products*", "(POST|PUT|DELETE)", "allow"},
 		{"merchant", "/v1/products/*/submit-audit", "POST", "allow"},
+		{"merchant", "/v1/categories", "POST", "allow"},
 
 		// 管理员专属权限
-		{"admin", "/v1/categories*", "(POST|PUT|DELETE|PATCH)", "allow"},
+		{"admin", "/v1/categories/*", "(POST|PUT|DELETE|PATCH)", "allow"},
 		{"admin", "/v1/products/*/audit", "POST", "allow"},
 		{"admin", "/v1/order/*/paid", "POST", "allow"},
 

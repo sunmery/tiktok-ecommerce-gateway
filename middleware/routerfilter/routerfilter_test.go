@@ -44,9 +44,9 @@ func TestPathMatcher(t *testing.T) {
 		},
 		{
 			"通配符匹配（单级）",
-			"/static/*",
+			"/v1/categories/*",
 			nil,
-			"/static/css/style.css",
+			"/v1/categories/batch",
 			"GET",
 			true,
 		},
