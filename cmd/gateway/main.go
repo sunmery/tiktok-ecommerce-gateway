@@ -2,19 +2,18 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"github.com/go-kratos/gateway/discovery"
-	"github.com/go-kratos/gateway/middleware"
-	"github.com/go-kratos/gateway/proxy/auth"
-	"net/http"
-	"os"
-
-	"time"
-
 	"github.com/go-kratos/gateway/client"
 	"github.com/go-kratos/gateway/config"
 	configLoader "github.com/go-kratos/gateway/config/config-loader"
+	"github.com/go-kratos/gateway/discovery"
+	"github.com/go-kratos/gateway/middleware"
+	"github.com/go-kratos/gateway/proxy/auth"
+	"golang.org/x/exp/rand"
+	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/go-kratos/gateway/proxy"
 	"github.com/go-kratos/gateway/proxy/debug"
@@ -39,14 +38,13 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
-	"golang.org/x/exp/rand"
 )
 
 var (
 	ctrlName          string
 	ctrlService       string
 	discoveryDSN      string
-	proxyAddrs        = newSliceVar(":8080")
+	proxyAddrs        []string
 	proxyConfig       string
 	priorityConfigDir string
 	withDebug         bool
@@ -72,18 +70,42 @@ func (s *sliceVar) Set(val string) error {
 }
 func (s *sliceVar) String() string { return fmt.Sprintf("%+v", *s) }
 
-func init() {
+// 从环境变量读取配置
+func initConfig() {
 	rand.Seed(uint64(time.Now().Nanosecond()))
-
-	flag.BoolVar(&withDebug, "debug", true, "enable debug handlers")
-	flag.Var(&proxyAddrs, "addr", "proxy address, eg: -addr 0.0.0.0:8080")
-	// flag.StringVar(&proxyConfig, "conf", "config.yaml", "config path, eg: -conf config.yaml")
-	flag.StringVar(&proxyConfig, "conf", "config.yaml", "config path, eg: -conf config.yaml")
-	flag.StringVar(&priorityConfigDir, "conf.priority", "", "priority config directory, eg: -conf.priority ./canary")
-	flag.StringVar(&ctrlName, "ctrl.name", os.Getenv("ADVERTISE_NAME"), "control gateway name, eg: gateway")
-	flag.StringVar(&ctrlService, "ctrl.service", "", "control service host, eg: http://127.0.0.1:8000")
-	// flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://99.suyiiyii.top:3026", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
-	flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://159.75.231.54:8500", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
+	// 代理地址解析优化
+	envAddrs := os.Getenv("PROXY_ADDRS")
+	if envAddrs == "" {
+		// 环境变量未设置时使用默认值
+		proxyAddrs = []string{":8080"}
+	} else {
+		// 处理可能存在的空元素（如 "8080,,8081"）
+		splitAddrs := strings.Split(envAddrs, ",")
+		validAddrs := make([]string, 0, len(splitAddrs))
+		for _, addr := range splitAddrs {
+			if trimmed := strings.TrimSpace(addr); trimmed != "" {
+				validAddrs = append(validAddrs, trimmed)
+			}
+		}
+		if len(validAddrs) == 0 {
+			// 环境变量值无效时回退默认值
+			proxyAddrs = []string{":8080"}
+		} else {
+			proxyAddrs = validAddrs
+		}
+	}
+	withDebug = os.Getenv("DEBUG") == "true"
+	proxyConfig = os.Getenv("CONFIG_PATH")
+	if proxyConfig == "" {
+		proxyConfig = "config.yaml" // 默认值
+	}
+	priorityConfigDir = os.Getenv("PRIORITY_CONFIG_DIR")
+	ctrlName = os.Getenv("CTRL_NAME")
+	if ctrlName == "" {
+		ctrlName = os.Getenv("ADVERTISE_NAME")
+	}
+	ctrlService = os.Getenv("CTRL_SERVICE")
+	discoveryDSN = os.Getenv("DISCOVERY_DSN")
 }
 
 func makeDiscovery() registry.Discovery {
@@ -101,7 +123,10 @@ func makeDiscovery() registry.Discovery {
 
 func main() {
 	// 解析 命令行选项及参数
-	flag.Parse()
+	// flag.Parse()
+
+	// 初始化配置
+	initConfig()
 
 	// 根据传入的服务发现创建客户端工厂
 	clientFactory := client.NewFactory(makeDiscovery())
@@ -168,8 +193,9 @@ func main() {
 	}
 
 	serverHandler = auth.Handler(serverHandler)
-	servers := make([]transport.Server, 0, len(proxyAddrs.Get()))
-	for _, addr := range proxyAddrs.Get() {
+
+	servers := make([]transport.Server, 0, len(proxyAddrs))
+	for _, addr := range proxyAddrs {
 		servers = append(servers, server.NewProxy(serverHandler, addr))
 	}
 	app := kratos.New(
