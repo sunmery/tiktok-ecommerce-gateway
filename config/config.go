@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/consul/api"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,17 +40,42 @@ type FileLoader struct {
 	watchCancel        context.CancelFunc
 	lock               sync.RWMutex
 	onChangeHandlers   []OnChange
+	// Consul相关字段
+	consulClient *api.Client
+	consulPath   string
 }
 
 // protojson 配置选项
 var _jsonOptions = &protojson.UnmarshalOptions{DiscardUnknown: true}
 
-// 创建文件加载器
+// NewFileLoader 创建文件加载器
 func NewFileLoader(confPath string, priorityDirectory string) (*FileLoader, error) {
 	fl := &FileLoader{
 		confPath:          confPath,
 		priorityDirectory: priorityDirectory,
 	}
+
+	// 解析Consul路径
+	if strings.HasPrefix(confPath, "consul://") {
+		addressPath := strings.TrimPrefix(confPath, "consul://")
+		parts := strings.SplitN(addressPath, "/", 2)
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("invalid consul path: %s", confPath)
+		}
+		address := parts[0]
+		path := parts[1]
+
+		consulClient, err := api.NewClient(&api.Config{
+			Address: address,
+			Scheme:  "http", // 根据需要调整
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create consul client: %v", err)
+		}
+		fl.consulClient = consulClient
+		fl.consulPath = path
+	}
+
 	if err := fl.initialize(); err != nil {
 		return nil, err
 	}
@@ -85,10 +112,27 @@ func sha256sum(in []byte) string {
 
 // 获取配置 hash，根据计算的 hash ，判断配置文件是否发生修改
 func (f *FileLoader) configSHA256() (string, map[string]string, error) {
-	configData, err := os.ReadFile(f.confPath)
-	if err != nil {
-		return "", nil, err
+	var configData []byte
+	var err error
+
+	if f.consulClient != nil {
+		// 从Consul获取配置
+		kv, _, err := f.consulClient.KV().Get(f.consulPath, nil)
+		if err != nil {
+			return "", nil, err
+		}
+		if kv == nil {
+			return "", nil, fmt.Errorf("consul config not found at path %s", f.consulPath)
+		}
+		configData = kv.Value
+	} else {
+		// 读取本地文件
+		configData, err = os.ReadFile(f.confPath)
+		if err != nil {
+			return "", nil, err
+		}
 	}
+
 	hash := sha256sum(configData)
 	phHash, err := f.priorityConfigSHA256()
 	if err != nil {
@@ -122,13 +166,29 @@ func (f *FileLoader) priorityConfigSHA256() (map[string]string, error) {
 	return out, nil
 }
 
-// 加载配置文件内容反序列化到结构体
+// Load 加载配置文件内容反序列化到结构体
 func (f *FileLoader) Load(_ context.Context) (*configv1.Gateway, error) {
-	log.Infof("loading config file: %s", f.confPath)
+	log.Infof("loading config from: %s", f.confPath)
 
-	configData, err := os.ReadFile(f.confPath)
-	if err != nil {
-		return nil, err
+	var configData []byte
+	var err error
+
+	if f.consulClient != nil {
+		// 从Consul获取配置
+		kv, _, err := f.consulClient.KV().Get(f.consulPath, nil)
+		if err != nil {
+			return nil, err
+		}
+		if kv == nil {
+			return nil, fmt.Errorf("consul config not found at path %s", f.consulPath)
+		}
+		configData = kv.Value
+	} else {
+		// 读取本地文件
+		configData, err = os.ReadFile(f.confPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	jsonData, err := yaml.YAMLToJSON(configData)
@@ -239,35 +299,74 @@ func (f *FileLoader) executeLoader() error {
 // 配置文件变更观察者 通过比对配置文件的 hash 值，判断配置文件是否发生变更
 func (f *FileLoader) watchproc(ctx context.Context) {
 	log.Info("start watch config file")
+	var lastIndex uint64
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Second * 5): // 5s 轮询一次
+		case <-time.After(time.Second * 5):
 		}
-		// 使用匿名函数自调用，可以防止迭代产生的变量占用过多内存，且可能会导致频繁gc
-		// 通过函数作用域，可以有效的解决这些问题
+
 		func() {
-			sha256hex, pfHash, err := f.configSHA256()
-			if err != nil {
-				log.Errorf("watch config file error: %+v", err)
-				return
-			}
-			if sha256hex != f.confSHA256 || !reflect.DeepEqual(pfHash, f.priorityConfigHash) {
-				log.Infof("config file changed, reload config, last sha256: %s, new sha256: %s, last pfHash: %+v, new pfHash: %+v", f.confSHA256, sha256hex, f.priorityConfigHash, pfHash)
-				if err := f.executeLoader(); err != nil {
-					log.Errorf("execute config loader error with new sha256: %s: %+v, config digest will not be changed until all loaders are succeeded", sha256hex, err)
+			if f.consulClient != nil {
+				// 检查优先级目录的哈希
+				currentPriorityHash, err := f.priorityConfigSHA256()
+				if err != nil {
+					log.Errorf("failed to get priority config hash: %v", err)
 					return
 				}
-				f.confSHA256 = sha256hex
-				f.priorityConfigHash = pfHash
-				return
+				priorityChanged := !reflect.DeepEqual(currentPriorityHash, f.priorityConfigHash)
+
+				// 使用阻塞查询监听Consul配置变化
+				kv, meta, err := f.consulClient.KV().Get(f.consulPath, &api.QueryOptions{
+					WaitIndex: lastIndex,
+				})
+				if err != nil {
+					log.Errorf("watch consul config error: %+v", err)
+					return
+				}
+				if kv == nil {
+					log.Errorf("consul config not found at path %s", f.consulPath)
+					return
+				}
+
+				newHash := sha256sum(kv.Value)
+				consulChanged := meta.LastIndex != lastIndex || newHash != f.confSHA256
+
+				if consulChanged || priorityChanged {
+					log.Infof("config changed (consul: %v, priority: %v), reloading...", consulChanged, priorityChanged)
+					if err := f.executeLoader(); err != nil {
+						log.Errorf("execute config loader error: %v", err)
+						return
+					}
+					// 更新索引和哈希
+					lastIndex = meta.LastIndex
+					f.confSHA256 = newHash
+					f.priorityConfigHash = currentPriorityHash
+				}
+			} else {
+				// 原本地文件监听逻辑
+				sha256hex, pfHash, err := f.configSHA256()
+				if err != nil {
+					log.Errorf("watch config file error: %+v", err)
+					return
+				}
+				if sha256hex != f.confSHA256 || !reflect.DeepEqual(pfHash, f.priorityConfigHash) {
+					log.Infof("config file changed, reload config, last sha256: %s, new sha256: %s, last pfHash: %+v, new pfHash: %+v", f.confSHA256, sha256hex, f.priorityConfigHash, pfHash)
+					if err := f.executeLoader(); err != nil {
+						log.Errorf("execute config loader error with new sha256: %s: %+v", sha256hex, err)
+						return
+					}
+					f.confSHA256 = sha256hex
+					f.priorityConfigHash = pfHash
+				}
 			}
 		}()
 	}
 }
 
-// 关闭配置文件加载
+// Close 关闭配置文件加载
 func (f *FileLoader) Close() {
 	f.watchCancel()
 }

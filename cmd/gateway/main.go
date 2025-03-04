@@ -22,17 +22,17 @@ import (
 
 	_ "net/http/pprof"
 
-	_ "github.com/go-kratos/gateway/discovery/consul" // Consul服务发现
-	_ "github.com/go-kratos/gateway/middleware/bbr" // 负载均衡中间件
-	"github.com/go-kratos/gateway/middleware/circuitbreaker" // 熔断中间件
-	_ "github.com/go-kratos/gateway/middleware/cors" // CORS中间件
-	_ "github.com/go-kratos/gateway/middleware/jwt" // JWT中间件
-	_ "github.com/go-kratos/gateway/middleware/logging" // 日志中间件
-	_ "github.com/go-kratos/gateway/middleware/rbac" // 权限中间件
-	_ "github.com/go-kratos/gateway/middleware/rewrite" // 重写中间件
-	_ "github.com/go-kratos/gateway/middleware/routerfilter" // 过滤中间件
-	_ "github.com/go-kratos/gateway/middleware/tracing" // 链路追踪中间件
-	_ "github.com/go-kratos/gateway/middleware/transcoder" // 编解码中间件
+	_ "github.com/go-kratos/gateway/discovery/consul"
+	_ "github.com/go-kratos/gateway/middleware/bbr"
+	"github.com/go-kratos/gateway/middleware/circuitbreaker"
+	_ "github.com/go-kratos/gateway/middleware/cors"
+	_ "github.com/go-kratos/gateway/middleware/jwt"
+	_ "github.com/go-kratos/gateway/middleware/logging"
+	_ "github.com/go-kratos/gateway/middleware/rbac"
+	_ "github.com/go-kratos/gateway/middleware/rewrite"
+	_ "github.com/go-kratos/gateway/middleware/routerfilter" // 添加这行
+	_ "github.com/go-kratos/gateway/middleware/tracing"
+	_ "github.com/go-kratos/gateway/middleware/transcoder"
 	_ "go.uber.org/automaxprocs"
 
 	"github.com/go-kratos/kratos/v2"
@@ -77,12 +77,13 @@ func init() {
 
 	flag.BoolVar(&withDebug, "debug", true, "enable debug handlers")
 	flag.Var(&proxyAddrs, "addr", "proxy address, eg: -addr 0.0.0.0:8080")
+	// flag.StringVar(&proxyConfig, "conf", "config.yaml", "config path, eg: -conf config.yaml")
 	flag.StringVar(&proxyConfig, "conf", "config.yaml", "config path, eg: -conf config.yaml")
 	flag.StringVar(&priorityConfigDir, "conf.priority", "", "priority config directory, eg: -conf.priority ./canary")
 	flag.StringVar(&ctrlName, "ctrl.name", os.Getenv("ADVERTISE_NAME"), "control gateway name, eg: gateway")
 	flag.StringVar(&ctrlService, "ctrl.service", "", "control service host, eg: http://127.0.0.1:8000")
-	flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://99.suyiiyii.top:3026", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
-	// flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://159.75.231.54:8500", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
+	// flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://99.suyiiyii.top:3026", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
+	flag.StringVar(&discoveryDSN, "discovery.dsn", "consul://159.75.231.54:8500", "discovery dsn, eg: consul://127.0.0.1:7070?token=secret&datacenter=prod")
 }
 
 func makeDiscovery() registry.Discovery {

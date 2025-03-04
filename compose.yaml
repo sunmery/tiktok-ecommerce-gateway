@@ -2,10 +2,10 @@ services:
 
   gateway:
     image: ccr.ccs.tencentyun.com/kratos/gateway:dev
-    platform: linux/amd64
+#    platform: linux/amd64
     #network_mode: host
     ports:
-      - "3015:8080"
+      - "8080:8080"
     container_name: ecommerce-gateway
     restart: on-failure:3
     volumes:

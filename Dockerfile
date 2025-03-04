@@ -2,7 +2,7 @@
 # https://docs.docker.com/go/dockerfile-reference/
 
 # 定义基础镜像的 Golang 版本
-ARG GOIMAGE=golang:1.23.3-alpine3.20
+ARG GOIMAGE=golang:1.24.0-alpine3.21
 
 FROM --platform=$BUILDPLATFORM ${GOIMAGE} AS build
 COPY . /src
@@ -79,20 +79,21 @@ RUN mkdir -p /data/conf
 CMD ["./gateway", "-conf", "/data/conf"]
 
 # 构建Docker所属的当前平台与架构的二进制文件, 进到当前的backend目录
-# VERSION=dev
-# REPOSITORY="team/backend"
 # Docker 容器在 Linux 内核上运行，即便是在 macOS 或 Windows 环境中。
 # 如果使用docker构建时传递 GOOS=darwin 会导致构建的二进制文件不兼容于 Linux 环境，从而出现 exec format error
 # 所以在使用docker构建时的目标平台的GOOS应该为 linux，而非 darwin。
+
+# VERSION=dev
 # docker build . \
 #   --progress=plain \
-#   -t ecommerce/gateway:dev \
+#   -t ecommerce/gateway:$VERSION \
 #   --build-arg CGOENABLED=0 \
-#   --build-arg GOIMAGE=golang:1.23.3-alpine3.20 \
+#   --build-arg GOIMAGE=golang:1.24.0-alpine3.21 \
 #   --build-arg GOOS=linux \
 #   --build-arg GOARCH=amd64 \
 #   --build-arg VERSION=$VERSION \
-#   --build-arg GATEWAY_PORT=8080
+#   --build-arg GATEWAY_PORT=8080 \
+#   --platform linux/amd64
 
 # 构建多架构的二进制文件, 需要在Docker Desktop 启用 containerd 映像存储
 # https://docs.docker.com/desktop/containerd/#enable-the-containerd-image-store
@@ -108,7 +109,7 @@ CMD ["./gateway", "-conf", "/data/conf"]
 #   --progress=plain \
 #   -t $REPOSITORY:$VERSION \
 #   --build-arg CGOENABLED=0 \
-#   --build-arg GOIMAGE=golang:1.23.3-alpine3.20 \
+#   --build-arg GOIMAGE=golang:1.24.0-alpine3.21 \
 #   --build-arg VERSION=$VERSION \
 #   --build-arg HTTP_PORT=$HTTP_PORT \
 #   --build-arg GRPC_PORT=$GRPC_PORT \
