@@ -24,14 +24,14 @@ import (
 
 type OnChange func() error
 
-// 配置加载接口
+// ConfigLoader 配置加载接口
 type ConfigLoader interface {
 	Load(context.Context) (*configv1.Gateway, error)
 	Watch(OnChange)
 	Close()
 }
 
-// 文件加载器
+// FileLoader 文件加载器
 type FileLoader struct {
 	confPath           string            // conf file path
 	confSHA256         string            // conf file hash

@@ -1,24 +1,22 @@
 services:
 
   gateway:
-    image: ccr.ccs.tencentyun.com/kratos/gateway:dev
-#    platform: linux/amd64
-    #network_mode: host
+    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.0.9
     ports:
       - "8080:8080"
     container_name: ecommerce-gateway
     restart: on-failure:3
+    environment:
+      - CASDOOR_URL=http://casdoor:8000
+      - REDIS_ADDR=consul:8500
+      - DISCOVERY_DSN=consul://consul:8500
+      - CONFIG_PATH=consul://consul:8500/ecommerce/gateway/config.yaml
+      - JWT_PUBKEY_PATH=/app/dynamic-config/public.pem
+      - RBAC_MODEL=/app/dynamic-config/rbac_model.conf
+    # 把配置文件挂载到容器中, 线上服务器需要 ./cmd/gateway 目录改成配置文件的路径
     volumes:
-      - ./config.yaml:/app/configs/config.yaml
-      - ./public.pem:/app/public.pem
+      - ./cmd/gateway:/app/dynamic-config
     command:
       - "/app/gateway"
       - "-conf"
       - "/app/configs/config.yaml"
-
-  # 将本地的 config.yaml 映射到容器中的 /app/configs/config.yaml
-  # docker cp config.yaml ecommerce-gateway:/app/configs/config.yaml
-
-  # 将证书 映射到容器中的 /app/configs/config.yaml
-  # docker cp public.pem ecommerce-gateway:/app/
-  # docker compose restart

@@ -12,8 +12,6 @@ WORKDIR /src
 ARG VERSION=latest
 
 # Go的环境变量, 例如alpine镜像不内置gcc,则关闭CGO很有效
-ARG GOOS=linux
-ARG GOARCH=amd64
 ARG CGOENABLED=0
 
 # Go的环境变量, 例如alpine镜像不内置gcc,则关闭CGO很有效
@@ -33,17 +31,16 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 # 获取代码版本号，用于编译时标记二进制文件
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,target=. \
-    GOOS=$GOOS \
-    GOARCH=$GOARCH \
     CGOENABLED=$CGOENABLED \
     go build -o /bin ./...
    # 带版本的形式: go build -ldflags="-X main.Version=${VERSION}" -o /bin/main .
-   # 多个服务的形式: go build -o /bin/ ./...
-COPY ./cmd/gateway /bin/configs
 
-FROM alpine:latest AS final
+COPY ./cmd/gateway /bin/
+
+FROM --platform=$BUILDPLATFORM alpine:latest AS final
+
 # 从构建阶段复制编译好的 Go 应用程序到运行阶段
-COPY --from=build /bin /app
+COPY --from=build /bin /app/
 
 WORKDIR /app
 
@@ -73,36 +70,34 @@ ARG GATEWAY_PORT=8080
 # 指定容器对外暴露的端口号
 EXPOSE $GATEWAY_PORT
 
-RUN mkdir -p /data/conf
+RUN mkdir -p /app/dynamic-config
+
+WORKDIR /app/dynamic-config
 
 # 设置容器启动时执行的命令
-CMD ["./gateway", "-conf", "/data/conf"]
+CMD ["/app/gateway", "-conf", "/app/dynamic-config/config.yaml"]
 
 # 构建Docker所属的当前平台与架构的二进制文件, 进到当前的backend目录
 # Docker 容器在 Linux 内核上运行，即便是在 macOS 或 Windows 环境中。
 # 如果使用docker构建时传递 GOOS=darwin 会导致构建的二进制文件不兼容于 Linux 环境，从而出现 exec format error
 # 所以在使用docker构建时的目标平台的GOOS应该为 linux，而非 darwin。
 
-# VERSION=dev
 # docker build . \
 #   --progress=plain \
-#   -t ecommerce/gateway:$VERSION \
+#   -t ecommerce/gateway:dev \
 #   --build-arg CGOENABLED=0 \
-#   --build-arg GOIMAGE=golang:1.24.0-alpine3.21 \
+#   --build-arg GOIMAGE=golang:1.24.0 \
 #   --build-arg GOOS=linux \
-#   --build-arg GOARCH=amd64 \
-#   --build-arg VERSION=$VERSION \
-#   --build-arg GATEWAY_PORT=8080 \
-#   --platform linux/amd64
+#   --build-arg GOARCH=arm64 \
+#   --build-arg VERSION=dev \
+#   --build-arg GATEWAY_PORT=8080
 
 # 构建多架构的二进制文件, 需要在Docker Desktop 启用 containerd 映像存储
 # https://docs.docker.com/desktop/containerd/#enable-the-containerd-image-store
-# VERSION=v1.0.0
-# REPOSITORY="ecommerce/gateway"
-# GOOS=linux
-# GOARCH=amd64
-# HTTP_PORT=30001
-# GRPC_PORT=30002
+# VERSION=v1.0.6
+# REGISTER="ccr.ccs.tencentyun.com"
+# REPOSITORY="$REGISTER/kratos/gateway"
+# GATEWAY_PORT=8080
 # PLATFORM_1=linux/amd64
 # PLATFORM_2=linux/arm64
 # docker buildx build . \
@@ -111,12 +106,11 @@ CMD ["./gateway", "-conf", "/data/conf"]
 #   --build-arg CGOENABLED=0 \
 #   --build-arg GOIMAGE=golang:1.24.0-alpine3.21 \
 #   --build-arg VERSION=$VERSION \
-#   --build-arg HTTP_PORT=$HTTP_PORT \
-#   --build-arg GRPC_PORT=$GRPC_PORT \
+#   --build-arg GATEWAY_PORT=$GATEWAY_PORT \
 #   --build-arg GOOS=$GOOS \
 #   --build-arg GOARCH=$GOARCH \
 #   --platform $PLATFORM_1,$PLATFORM_2 \
-#   --load
+#   --push
 
 # 推送
 # register="ccr.ccs.tencentyun.com"
@@ -124,12 +118,8 @@ CMD ["./gateway", "-conf", "/data/conf"]
 # docker push $register/$REPOSITORY:$VERSION
 
 # 拉取
-# GOOS=linux
-# GOARCH=amd64
-# docker pull $register/$REPOSITORY:$VERSION --platform $GOOS/GOARCH
+# docker pull $register/$REPOSITORY:$VERSION
 
 # 运行
-# docker run \
-# --rm \
-# -p 8080:8080 \
+# docker compose up -d
 

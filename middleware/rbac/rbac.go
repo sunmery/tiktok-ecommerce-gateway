@@ -20,10 +20,11 @@ var (
 	NotAuthZ             = errors.New("权限不足")
 	syncedCachedEnforcer *casbin.SyncedCachedEnforcer
 	cache                = NewCache(5*time.Minute, 10*time.Minute)
-	casdoorAPI           = os.Getenv("casdoor_endpoint")
-	RedisAddr            = os.Getenv("redis_addr") // localhost:6379
+	casdoorUrl           = os.Getenv("CASDOOR_URL") // http://localhost:8000
+	rbacModel             string  // ./rbac_model.conf
+	RedisAddr            = os.Getenv("REDIS_ADDR")  // localhost:6379
 	// userOwner        = os.Getenv("CASDOOR_ORG")
-	userOwner      = "tiktok"
+	userOwner         = "tiktok"
 	userIdMetadataKey = "x-md-global-user-id"
 )
 
@@ -103,7 +104,12 @@ func initEnforcer() {
 		panic(fmt.Errorf("failed to initialize redis adapter: %v", err))
 	}
 
-	enforcer, err := casbin.NewSyncedCachedEnforcer("./rbac_model.conf", a)
+	rbacModel = os.Getenv("RBAC_MODEL")
+	if rbacModel == "" {
+		rbacModel = "./rbac_model.conf"
+	}
+
+	enforcer, err := casbin.NewSyncedCachedEnforcer(rbacModel, a)
 	if err != nil {
 		panic(fmt.Errorf("failed to initialize enforcer: %v", err))
 	}
@@ -159,9 +165,11 @@ func (c *Cache) Set(key string, value interface{}) {
 		expiration: time.Now().Add(5 * time.Minute).UnixNano(),
 	}
 }
+
 type JwtOptions struct {
 	SkipPaths []string `json:"skip_paths"`
 }
+
 // Middleware 中间件实现
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 	var routerFilter *config.Middleware_RouterFilter
@@ -247,7 +255,7 @@ func fetchRolesFromCasdoor(userID string) (string, error) {
 	id := fmt.Sprintf("%s/%s", userOwner, userID)
 	// id = "tiktok/7ae63d43-493f-44b0-830e-6bf4064226a3"
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/get-user?id=%s&owner=%s", casdoorAPI, id, userOwner), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/get-user?id=%s&owner=%s", casdoorUrl, id, userOwner), nil)
 	q := req.URL.Query()
 	q.Add("owner", userOwner)
 	h := req.Header

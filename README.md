@@ -6,10 +6,11 @@ HTTP -> Proxy -> Router -> Middleware -> Client -> Selector -> Node
 
 ## Run
 ```bash
-casdoor_endpoint=http://casdoor_endpoint:8000 \
-redis_addr=redis_addr:6379 \
-JWT_PUBKEY_PATH="./public.pem" \
-kratos run
+CASDOOR_URL=http://casdoor:8000 \
+REDIS_ADDR=localhost:6379 \
+DISCOVERY_DSN=consul://localhost:8500 \
+CONFIG_PATH="consul://localhost:8500/kratos/gateway/config.yaml" \
+JWT_PUBKEY_PATH="./public.pem" kr run
 ```
 
 ## 编写自定义中间件

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/go-kratos/gateway/client"
 	"github.com/go-kratos/gateway/config"
 	configLoader "github.com/go-kratos/gateway/config/config-loader"
@@ -50,26 +49,6 @@ var (
 	withDebug         bool
 )
 
-type sliceVar struct {
-	val        []string
-	defaultVal []string
-}
-
-func newSliceVar(defaultVal ...string) sliceVar {
-	return sliceVar{defaultVal: defaultVal}
-}
-func (s *sliceVar) Get() []string {
-	if len(s.val) <= 0 {
-		return s.defaultVal
-	}
-	return s.val
-}
-func (s *sliceVar) Set(val string) error {
-	s.val = append(s.val, val)
-	return nil
-}
-func (s *sliceVar) String() string { return fmt.Sprintf("%+v", *s) }
-
 // 从环境变量读取配置
 func initConfig() {
 	rand.Seed(uint64(time.Now().Nanosecond()))
@@ -106,6 +85,9 @@ func initConfig() {
 	}
 	ctrlService = os.Getenv("CTRL_SERVICE")
 	discoveryDSN = os.Getenv("DISCOVERY_DSN")
+	if discoveryDSN == ""  {
+		discoveryDSN = "localhost:8500"
+	}
 }
 
 func makeDiscovery() registry.Discovery {

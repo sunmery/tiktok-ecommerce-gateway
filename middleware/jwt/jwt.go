@@ -19,7 +19,7 @@ import (
 var (
 	NotAuthN      = errors.New("unauthorized: authentication required")
 	publicKey     *rsa.PublicKey
-	publicKeyPath =os.Getenv("JWT_PUBKEY_PATH") // 证书文件路径
+	publicKeyPath = os.Getenv("JWT_PUBKEY_PATH") // 证书文件路径
 )
 
 func init() {
