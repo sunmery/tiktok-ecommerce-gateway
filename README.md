@@ -13,6 +13,43 @@ CONFIG_PATH="consul://localhost:8500/kratos/gateway/config.yaml" \
 JWT_PUBKEY_PATH="./public.pem" kr run
 ```
 
+## gRPC
+gRPC本质上是基于HTTP/2的协议, 它在调用时只使用POST方法, 所以gRPC的method只有POST方法, 所以gRPC的配置和HTTP的配置是一样的, 
+但HTTP路径是你自己定义的, gRPC路径是protoc这些生成器自动根据由服务名和方法名组成的
+
+path格式:
+- 特定路径: /包名.服务名/方法名
+- 通配符: /包名.服务名*
+
+示例:
+```protobuf
+package ecommerce.product.v1;
+service ProductService {}
+```
+path路径就是: 
+- /ecommerce.product.v1.ProductService*
+- /ecommerce.product.v1.ProductService/CreateProduct
+
+完整的gRPC配置示例:
+```yaml
+endpoints:
+  - path: /ecommerce.product.v1.ProductService*
+    timeout: 1s
+    method: POST
+    protocol: GRPC
+    backends:
+      - target: 'discovery:///ecommerce-product-v1'
+    retry:
+      attempts: 3
+      perTryTimeout: 0.1s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+```
+
 ## 编写自定义中间件
 1. 创建一个目录: ./middleware/routerfilter
 2. 创建一个文件: ./middleware/routerfilter/routerfilter.go

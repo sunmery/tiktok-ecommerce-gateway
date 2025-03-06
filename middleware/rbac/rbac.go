@@ -57,9 +57,9 @@ func initPolicies(e *casbin.SyncedCachedEnforcer) {
 		{"user", "/v1/auth/profile", "GET", "allow"},
 		{"user", "/v1/products", "GET", "allow"},
 		{"user", "/v1/users/*", "(GET|POST|PATCH|DELETE)", "allow"},
-		{"user", "/v1/cart*", "(GET|POST|DELETE)", "allow"},
+		{"user", "/v1/carts/*", "(GET|POST|DELETE)", "allow"},
 		{"user", "/v1/checkout", "POST", "allow"},
-		{"user", "/v1/order", "(GET|POST)", "allow"},
+		{"user", "/v1/orders", "(GET|POST)", "allow"},
 		{"user", "/v1/categories/*", "GET", "allow"},
 
 		// 商家特殊权限
@@ -69,6 +69,8 @@ func initPolicies(e *casbin.SyncedCachedEnforcer) {
 
 		// 管理员专属权限
 		{"admin", "/v1/categories/*", "(POST|PUT|DELETE|PATCH)", "allow"},
+		{"admin", "/v1/products", "(GET|POST|PUT|DELETE|PATCH)", "allow"},
+		{"admin", "/v1/products/*", "(GET|POST|PUT|DELETE|PATCH)", "allow"},
 		{"admin", "/v1/products/*/audit", "POST", "allow"},
 		{"admin", "/v1/order/*/paid", "POST", "allow"},
 

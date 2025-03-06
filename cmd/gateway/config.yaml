@@ -43,6 +43,9 @@ middlewares:
     # 无需认证的接口
     router_filter:
       rules:
+        - path: /ecommerce.product.v1.ProductService/*
+          methods:
+            - POST
         - path: /v1/categories/*
           methods:
             - GET
@@ -68,6 +71,9 @@ middlewares:
     # 不需要鉴权的接口
     router_filter:
       rules:
+        - path: /ecommerce.product.v1.ProductService/*
+          methods:
+            - POST
         - path: /v1/categories/*
           methods:
             - GET
@@ -90,3 +96,124 @@ middlewares:
             - POST
 
 endpoints:
+#  - path: /v1/auth*
+#    timeout: 1s
+#    description: "Get user information"
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-auth-v1'
+#        weight: 100
+#        health_check: { }
+#    retry:
+#      attempts: 3
+#      per_try_timeout: "7s"
+#      conditions:
+#        - by_status_code: "500-599"
+#        - by_header:
+#            name: "grpc-status"
+#            value: "14"
+#    metadata:
+#      cache: "true"
+#
+#  - path: /v1/users*
+#    timeout: 1s
+#    description: "Get user information"
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-user-v1'
+#        weight: 100
+#        health_check: { }
+#    retry:
+#      attempts: 3
+#      per_try_timeout: "7s"
+#      conditions:
+#        - by_status_code: "500-599"
+#        - by_header:
+#            name: "grpc-status"
+#            value: "14"
+#  - path: /v1/categories*
+#    timeout: 1s
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-category-v1'
+#    retry:
+#      attempts: 3
+#      per_try_timeout: "7s"
+#      conditions:
+#        - by_status_code: "500-599"
+#        - by_header:
+#            name: "grpc-status"
+#            value: "14"
+#    metadata:
+#      cache: "true"
+##  - path: /v1/carts*
+##    timeout: 1s
+##    protocol: HTTP
+##    backends:
+##      - target: 'discovery:///ecommerce-cart-v1'
+##    retry:
+##      attempts: 3
+##      per_try_timeout: "7s"
+##      conditions:
+##        - by_status_code: "500-599"
+##        - by_header:
+##            name: "grpc-status"
+##            value: "14"
+#
+#  - path: /v1/orders*
+#    timeout: 1s
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-order-v1'
+#    retry:
+#      attempts: 3
+#      per_try_timeout: "7s"
+#      conditions:
+#        - by_status_code: "500-599"
+#        - by_header:
+#            name: "grpc-status"
+#            value: "14"
+#
+#  - path: /v1/payments*
+#    timeout: 1s
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-payment-v1'
+#    retry:
+#      attempts: 3
+#      per_try_timeout: "7s"
+#      conditions:
+#        - by_status_code: "500-599"
+#        - by_header:
+#            name: "grpc-status"
+#            value: "14"
+  #  - path: /v1/products*
+  #    timeout: 1s
+  #    protocol: HTTP
+  #    backends:
+  #      - target: 'discovery:///ecommerce-product-v1'
+  #    retry:
+  #      attempts: 3
+  #      per_try_timeout: "7s"
+  #      conditions:
+  #        - by_status_code: "500-599"
+  #        - by_header:
+  #            name: "grpc-status"
+  #            value: "14"
+  #    metadata:
+  #      cache: "true"
+
+  - path: /ecommerce.product.v1.ProductService*
+    timeout: 1s
+    method: POST
+    protocol: GRPC
+    backends:
+      - target: 'discovery:///ecommerce-product-v1'
+    retry:
+      attempts: 3
+      perTryTimeout: 0.1s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'

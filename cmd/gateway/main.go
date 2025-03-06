@@ -104,9 +104,6 @@ func makeDiscovery() registry.Discovery {
 // 在main函数前添加以下中间件实现
 
 func main() {
-	// 解析 命令行选项及参数
-	// flag.Parse()
-
 	// 初始化配置
 	initConfig()
 

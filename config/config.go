@@ -253,7 +253,7 @@ func (f *FileLoader) parsePriorityConfig(cfgPath string) (*configv1.PriorityConf
 	return out, nil
 }
 
-// 返回一个函数，用于替换源配置中的 endpoint，如果源配置中不存在，则添加到源配置中
+// MakeReplaceOrPrependEndpointFn 返回一个函数，用于替换源配置中的 endpoint，如果源配置中不存在，则添加到源配置中
 func MakeReplaceOrPrependEndpointFn(origin []*configv1.Endpoint) func([]*configv1.Endpoint, *configv1.Endpoint) []*configv1.Endpoint {
 	keyFn := func(e *configv1.Endpoint) string {
 		return fmt.Sprintf("%s-%s", e.Method, e.Path)

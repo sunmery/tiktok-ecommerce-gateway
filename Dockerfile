@@ -1,6 +1,3 @@
-# syntax=docker/dockerfile:1
-# https://docs.docker.com/go/dockerfile-reference/
-
 # 定义基础镜像的 Golang 版本
 ARG GOIMAGE=golang:1.24.0-alpine3.21
 
@@ -8,6 +5,9 @@ FROM --platform=$BUILDPLATFORM ${GOIMAGE} AS build
 COPY . /src
 WORKDIR /src
 
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
 # 版本号
 ARG VERSION=latest
 
@@ -15,7 +15,7 @@ ARG VERSION=latest
 ARG CGOENABLED=0
 
 # Go的环境变量, 例如alpine镜像不内置gcc,则关闭CGO很有效
-ARG GO_PROXY=https://proxy.golang.com.cn,direct
+ARG GOPROXY=https://goproxy.cn,direct
 
 # 设置环境变量
 # RUN go env -w GOPROXY=https://goproxy.cn,direct
@@ -26,7 +26,9 @@ RUN go env -w GOPROXY=$GO_PROXY
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=go.sum,target=go.sum \
     --mount=type=bind,source=go.mod,target=go.mod \
-    go mod download -x
+    GOARCH=${TARGETARCH} \
+    CGOENABLED=$CGOENABLED \
+    go mod tidy
 
 # 获取代码版本号，用于编译时标记二进制文件
 RUN --mount=type=cache,target=/go/pkg/mod/ \
@@ -95,8 +97,7 @@ CMD ["/app/gateway", "-conf", "/app/dynamic-config/config.yaml"]
 # 构建多架构的二进制文件, 需要在Docker Desktop 启用 containerd 映像存储
 # https://docs.docker.com/desktop/containerd/#enable-the-containerd-image-store
 # VERSION=v1.0.6
-# REGISTER="ccr.ccs.tencentyun.com"
-# REPOSITORY="$REGISTER/kratos/gateway"
+# REPOSITORY="ccr.ccs.tencentyun.com/kratos/gateway"
 # GATEWAY_PORT=8080
 # PLATFORM_1=linux/amd64
 # PLATFORM_2=linux/arm64
@@ -107,8 +108,6 @@ CMD ["/app/gateway", "-conf", "/app/dynamic-config/config.yaml"]
 #   --build-arg GOIMAGE=golang:1.24.0-alpine3.21 \
 #   --build-arg VERSION=$VERSION \
 #   --build-arg GATEWAY_PORT=$GATEWAY_PORT \
-#   --build-arg GOOS=$GOOS \
-#   --build-arg GOARCH=$GOARCH \
 #   --platform $PLATFORM_1,$PLATFORM_2 \
 #   --push
 
