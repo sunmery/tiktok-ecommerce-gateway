@@ -51,7 +51,6 @@ type ProxyServer struct {
 // NewProxy new a gateway server.
 func NewProxy(handler http.Handler, addr string) *ProxyServer {
 	// TLS
-	// cert, err := tls.LoadX509KeyPair("tls/gateway.crt", "tls/gateway.key")
 	certFile := os.Getenv("certFile")
 	keyFile := os.Getenv("keyFile")
 
@@ -73,7 +72,6 @@ func NewProxy(handler http.Handler, addr string) *ProxyServer {
 		log.Fatalf("私钥文件不存在: %s", keyFile)
 	}
 
-	// cert, err := tls.LoadX509KeyPair(certFileData, keyFileData)
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		log.Fatalf("证书加载失败: %v (certFile=%s, keyFile=%s)", err, certFile, keyFile)

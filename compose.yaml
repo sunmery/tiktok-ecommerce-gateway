@@ -1,9 +1,7 @@
-version: '3.9'
-
 services:
 
   gateway:
-    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.3.0
+    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.4.0
     build:
       context: .
       target: final
@@ -11,7 +9,7 @@ services:
       args:
         CGOENABLED: 0
         GOIMAGE: golang:1.24.0-alpine3.21
-        VERSION: v1.3.0
+        VERSION: v1.4.0
         GATEWAY_PORT: 8080
     ports:
       - "8080:8080"
@@ -19,7 +17,7 @@ services:
     restart: on-failure:3
     environment:
       - discoveryDsn=consul://consul:8500
-      - configPath=consul://consul:8500/ecommerce/gateway/config.yaml
+      - configPath=ecommerce/gateway/config.yaml
       - jwtPubkeyPath=/app/dynamic-config/public.pem
       - certFile=/app/dynamic-config/tls/gateway.crt
       - keyFile=/app/dynamic-config/tls/gateway.key

@@ -2,7 +2,7 @@ package loader
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/hashicorp/consul/api"
@@ -29,5 +29,5 @@ func (l *ConsulFileLoader) DownloadFile(consulPath, localPath string) error {
 	if kv == nil {
 		return fmt.Errorf("file not found: %s", consulPath)
 	}
-	return ioutil.WriteFile(localPath, kv.Value, 0644)
+	return os.WriteFile(localPath, kv.Value, 0644)
 }
