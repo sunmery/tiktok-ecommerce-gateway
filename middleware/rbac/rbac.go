@@ -21,7 +21,7 @@ var (
 	syncedCachedEnforcer *casbin.SyncedCachedEnforcer
 	cache                = NewCache(5*time.Minute, 10*time.Minute)
 	casdoorUrl           = os.Getenv("CASDOOR_URL") // http://localhost:8000
-	rbacModel             string  // ./rbac_model.conf
+	rbacModel            string                     // ./rbac_model.conf
 	RedisAddr            = os.Getenv("REDIS_ADDR")  // localhost:6379
 	// userOwner        = os.Getenv("CASDOOR_ORG")
 	userOwner         = "tiktok"
@@ -66,13 +66,17 @@ func initPolicies(e *casbin.SyncedCachedEnforcer) {
 		{"merchant", "/v1/products*", "(POST|PUT|DELETE)", "allow"},
 		{"merchant", "/v1/products/*/submit-audit", "POST", "allow"},
 		{"merchant", "/v1/categories", "POST", "allow"},
+		{"merchant", "/v1/merchants", "(GET|POST|PUT|DELETE|PATCH)", "allow"},
 
 		// 管理员专属权限
 		{"admin", "/v1/categories/*", "(POST|PUT|DELETE|PATCH)", "allow"},
-		{"admin", "/v1/products", "(GET|POST|PUT|DELETE|PATCH)", "allow"},
 		{"admin", "/v1/products/*", "(GET|POST|PUT|DELETE|PATCH)", "allow"},
 		{"admin", "/v1/products/*/audit", "POST", "allow"},
+		{"admin", "/v1/merchants/*", "(GET|POST|PUT|DELETE|PATCH)", "allow"},
 		{"admin", "/v1/order/*/paid", "POST", "allow"},
+
+		// gRPC
+		{"admin", "/ecommerce.product.v1.ProductService/*", "(POST|PUT|DELETE|PATCH)", "allow"},
 
 		// 拒绝所有未明确允许的请求（默认拒绝）
 		{"anyone", "/*", ".*", "deny"},

@@ -6,7 +6,7 @@ COPY . /src
 WORKDIR /src
 
 ARG TARGETPLATFORM
-ARG TARGETOS
+ARG TARGETOS=linux
 ARG TARGETARCH
 # 版本号
 ARG VERSION=latest
@@ -21,18 +21,22 @@ ARG GOPROXY=https://goproxy.cn,direct
 # RUN go env -w GOPROXY=https://goproxy.cn,direct
 RUN go env -w GOPROXY=$GO_PROXY
 
+RUN echo "TARGETOS: $TARGETOS"
+RUN echo "TARGETARCH: $TARGETARCH"
+
 # 利用 Docker 层缓存机制，单独下载依赖项，提高后续构建速度。
 # 使用缓存挂载和绑定挂载技术，避免不必要的文件复制到容器中。
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,source=go.sum,target=go.sum \
     --mount=type=bind,source=go.mod,target=go.mod \
-    GOARCH=${TARGETARCH} \
     CGOENABLED=$CGOENABLED \
-    go mod tidy
+    go mod download -x
 
 # 获取代码版本号，用于编译时标记二进制文件
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,target=. \
+    GOOS=$TARGETOS \
+    GOARCH=$TARGETARCH \
     CGOENABLED=$CGOENABLED \
     go build -o /bin ./...
    # 带版本的形式: go build -ldflags="-X main.Version=${VERSION}" -o /bin/main .

@@ -2,15 +2,13 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
-	"math"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 )
 
 var (
@@ -51,13 +49,27 @@ type ProxyServer struct {
 
 // NewProxy new a gateway server.
 func NewProxy(handler http.Handler, addr string) *ProxyServer {
+	// TLS
+	cert, err := tls.LoadX509KeyPair("tls/gateway.crt", "tls/gateway.key")
+	if err != nil {
+		log.Fatalf("Failed to load certificate: %v", err)
+	}
 	return &ProxyServer{
 		Server: &http.Server{
 			Addr: addr,
-			Handler: h2c.NewHandler(handler, &http2.Server{
-				IdleTimeout:          idleTimeout,
-				MaxConcurrentStreams: math.MaxUint32,
-			}),
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert}, // 添加证书
+				MinVersion:   tls.VersionTLS12,        //  // 设置最低支持的 TLS 版本
+			},
+			// TLS HTTP/2 标准加密传输协议
+			Handler: handler,
+
+			// 明文 HTTP/2
+			// Handler: h2c.NewHandler(handler, &http2.Server{
+			// 	IdleTimeout:          idleTimeout,
+			// 	MaxConcurrentStreams: math.MaxUint32,
+			// }),
+
 			ReadTimeout:       readTimeout,
 			ReadHeaderTimeout: readHeaderTimeout,
 			WriteTimeout:      writeTimeout,
@@ -69,7 +81,12 @@ func NewProxy(handler http.Handler, addr string) *ProxyServer {
 // Start the server.
 func (s *ProxyServer) Start(ctx context.Context) error {
 	log.Infof("proxy listening on %s", s.Addr)
-	err := s.ListenAndServe()
+	// HTTP
+	// err := s.ListenAndServe()
+
+	// TLS
+	// 证书已在 TLSConfig 中加载, 参数留空即可
+	err := s.ListenAndServeTLS("", "")
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
