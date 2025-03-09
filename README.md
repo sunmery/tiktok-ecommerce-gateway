@@ -125,7 +125,6 @@ openssl req -x509 -nodes -newkey rsa:2048 \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 ```
 
-
 2. 创建TLS配置
 
 修改 `server/proxy.go`的NewProxy函数:

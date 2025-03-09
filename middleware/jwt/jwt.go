@@ -13,25 +13,38 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 var (
 	NotAuthN      = errors.New("unauthorized: authentication required")
 	publicKey     *rsa.PublicKey
-	publicKeyPath = os.Getenv("JWT_PUBKEY_PATH") // 证书文件路径
+	publicKeyPath = getPublicKeyPath() // 证书文件路径
 )
 
-func init() {
-	middleware.Register("jwt", Middleware)
-// 初始化时加载证书
-	loadPublicKey()
+var initialized bool
+
+func Init() {
+	if !initialized {
+		middleware.Register("jwt", Middleware)
+		loadPublicKey()
+		initialized = true
+	}
+}
+func getPublicKeyPath() string {
+	if path := os.Getenv("jwtPubkeyPath"); path != "" {
+		return path
+	}
+	// 默认使用从Consul下载的路径
+
+	return filepath.Join("dynamic-config", "public.pem")
 }
 
 func loadPublicKey() {
 	certData, err := os.ReadFile(publicKeyPath)
 	if err != nil {
-		panic(fmt.Sprintf("读取证书文件失败: %v", err))
+		panic(fmt.Sprintf("读取证书文件失败: %v (路径: %s)", err, publicKeyPath))
 	}
 
 	block, _ := pem.Decode(certData)

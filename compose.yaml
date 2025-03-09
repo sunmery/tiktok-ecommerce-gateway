@@ -1,22 +1,31 @@
+version: '3.9'
+
 services:
 
   gateway:
-    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.0.10
+    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.3.0
+    build:
+      context: .
+      target: final
+      # 构建参数
+      args:
+        CGOENABLED: 0
+        GOIMAGE: golang:1.24.0-alpine3.21
+        VERSION: v1.3.0
+        GATEWAY_PORT: 8080
     ports:
       - "8080:8080"
     container_name: ecommerce-gateway
     restart: on-failure:3
     environment:
-      - CASDOOR_URL=http://casdoor:8000
-      - REDIS_ADDR=consul:8500
-      - DISCOVERY_DSN=consul://consul:8500
-      - CONFIG_PATH=consul://consul:8500/ecommerce/gateway/config.yaml
-      - JWT_PUBKEY_PATH=/app/dynamic-config/public.pem
-      - RBAC_MODEL=/app/dynamic-config/rbac_model.conf
-    # 把配置文件挂载到容器中, 线上服务器需要 ./cmd/gateway 目录改成配置文件的路径
+      - discoveryDsn=consul://consul:8500
+      - configPath=consul://consul:8500/ecommerce/gateway/config.yaml
+      - jwtPubkeyPath=/app/dynamic-config/public.pem
+      - certFile=/app/dynamic-config/tls/gateway.crt
+      - keyFile=/app/dynamic-config/tls/gateway.key
     volumes:
-      - ./cmd/gateway:/app/dynamic-config
-    command:
-      - "/app/gateway"
-      - "-conf"
-      - "/app/configs/config.yaml"
+      # 仅挂载本地配置文件（开发环境）
+      - ./dynamic-config:/app/dynamic-config
+    command: ["/app/gateway"]
+
+# docker compose build

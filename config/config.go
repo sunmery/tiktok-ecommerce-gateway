@@ -59,21 +59,17 @@ func NewFileLoader(confPath string, priorityDirectory string) (*FileLoader, erro
 	if strings.HasPrefix(confPath, "consul://") {
 		addressPath := strings.TrimPrefix(confPath, "consul://")
 		parts := strings.SplitN(addressPath, "/", 2)
-		if len(parts) < 2 {
-			return nil, fmt.Errorf("invalid consul path: %s", confPath)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("无效的 Consul 路径格式: %s", confPath)
 		}
-		address := parts[0]
-		path := parts[1]
 
-		consulClient, err := api.NewClient(&api.Config{
-			Address: address,
-			Scheme:  "http", // 根据需要调整
-		})
+		client, err := api.NewClient(&api.Config{Address: parts[0]})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create consul client: %v", err)
+			return nil, fmt.Errorf("consul 客户端初始化失败: %+v", err)
 		}
-		fl.consulClient = consulClient
-		fl.consulPath = path
+
+		fl.consulClient = client
+		fl.consulPath = parts[1]
 	}
 
 	if err := fl.initialize(); err != nil {
@@ -202,6 +198,14 @@ func (f *FileLoader) Load(_ context.Context) (*configv1.Gateway, error) {
 	if err := f.mergePriorityConfig(out); err != nil {
 		log.Warnf("failed to merge priority config: %+v", err)
 	}
+
+	// 注入环境变量
+	for k, v := range out.Envs {
+		if err := os.Setenv(k, v); err != nil {
+			log.Warnf("Failed to set env %s: %v", k, err)
+		}
+	}
+
 	return out, nil
 }
 
@@ -272,7 +276,7 @@ func MakeReplaceOrPrependEndpointFn(origin []*configv1.Endpoint) func([]*configv
 	}
 }
 
-// 设置配置文件变更事件处理器
+// Watch 设置配置文件变更事件处理器
 func (f *FileLoader) Watch(fn OnChange) {
 	log.Info("add config file change event handler")
 	f.lock.Lock()

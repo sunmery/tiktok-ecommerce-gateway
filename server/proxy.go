@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -50,9 +51,32 @@ type ProxyServer struct {
 // NewProxy new a gateway server.
 func NewProxy(handler http.Handler, addr string) *ProxyServer {
 	// TLS
-	cert, err := tls.LoadX509KeyPair("tls/gateway.crt", "tls/gateway.key")
+	// cert, err := tls.LoadX509KeyPair("tls/gateway.crt", "tls/gateway.key")
+	certFile := os.Getenv("certFile")
+	keyFile := os.Getenv("keyFile")
+
+	// 获取当前工作目录
+	wd, _ := os.Getwd()
+	log.Infof("当前工作目录: %s", wd)
+	log.Infof("certFile绝对路径: %s", filepath.Join(wd, certFile))
+	log.Infof("keyFile绝对路径: %s", filepath.Join(wd, keyFile))
+
+	if certFile == "" || keyFile == "" {
+		log.Fatal("certFile 或 keyFile 环境变量未设置")
+	}
+
+	// 检查文件存在性
+	if !fileExists(certFile) {
+		log.Fatalf("证书文件不存在: %s", certFile)
+	}
+	if !fileExists(keyFile) {
+		log.Fatalf("私钥文件不存在: %s", keyFile)
+	}
+
+	// cert, err := tls.LoadX509KeyPair(certFileData, keyFileData)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		log.Fatalf("Failed to load certificate: %v", err)
+		log.Fatalf("证书加载失败: %v (certFile=%s, keyFile=%s)", err, certFile, keyFile)
 	}
 	return &ProxyServer{
 		Server: &http.Server{
@@ -97,4 +121,10 @@ func (s *ProxyServer) Start(ctx context.Context) error {
 func (s *ProxyServer) Stop(ctx context.Context) error {
 	log.Info("proxy stopping")
 	return s.Shutdown(ctx)
+}
+
+// 文件存在性检查函数
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

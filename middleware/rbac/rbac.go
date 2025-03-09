@@ -20,9 +20,9 @@ var (
 	NotAuthZ             = errors.New("权限不足")
 	syncedCachedEnforcer *casbin.SyncedCachedEnforcer
 	cache                = NewCache(5*time.Minute, 10*time.Minute)
-	casdoorUrl           = os.Getenv("CASDOOR_URL") // http://localhost:8000
-	rbacModel            string                     // ./rbac_model.conf
-	RedisAddr            = os.Getenv("REDIS_ADDR")  // localhost:6379
+	casdoorUrl           = os.Getenv("casdoorUrl") // http://localhost:8000
+	rbacModel            string                    // ./rbac_model.conf
+
 	// userOwner        = os.Getenv("CASDOOR_ORG")
 	userOwner         = "tiktok"
 	userIdMetadataKey = "x-md-global-user-id"
@@ -42,9 +42,21 @@ type RoleType struct {
 	IsEnabled   bool          `json:"isEnabled"`
 }
 
-func init() {
+// 移除 init() 函数
+var initialized bool
+
+func InitEnforcer() {
+	if initialized {
+		return
+	}
+	redisAddr := os.Getenv("redisAddr") // localhost:6379
+	if redisAddr == "" {
+		panic("redisAddr 环境变量未设置")
+	}
+
 	middleware.Register("rbac", Middleware)
-	initEnforcer()
+	initialized = true
+	initEnforcer(redisAddr)
 }
 
 // 初始化策略
@@ -104,8 +116,8 @@ func initPolicies(e *casbin.SyncedCachedEnforcer) {
 }
 
 // 初始化Casbin Enforcer
-func initEnforcer() {
-	a, err := redisadapter.NewAdapter("tcp", RedisAddr)
+func initEnforcer(redisAddr string) {
+	a, err := redisadapter.NewAdapter("tcp", redisAddr)
 	if err != nil {
 		panic(fmt.Errorf("failed to initialize redis adapter: %v", err))
 	}

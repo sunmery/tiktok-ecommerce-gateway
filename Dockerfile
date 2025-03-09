@@ -2,8 +2,8 @@
 ARG GOIMAGE=golang:1.24.0-alpine3.21
 
 FROM --platform=$BUILDPLATFORM ${GOIMAGE} AS build
-COPY . /src
 WORKDIR /src
+COPY . .
 
 ARG TARGETPLATFORM
 ARG TARGETOS=linux
@@ -41,7 +41,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     go build -o /bin ./...
    # 带版本的形式: go build -ldflags="-X main.Version=${VERSION}" -o /bin/main .
 
-COPY ./cmd/gateway /bin/
+COPY cmd/gateway/ /bin/
 
 FROM --platform=$BUILDPLATFORM alpine:latest AS final
 
@@ -53,15 +53,16 @@ WORKDIR /app
 # 用户进程ID
 ARG UID=10001
 
-# 后端程序的HTTP/gRPC端口
+# 网关默认端口
 ARG GATEWAY_PORT=8080
 
 # 修改镜像源
-# RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
 
 # 安装应用运行必需的系统证书和时区数据包
-# RUN --mount=type=cache,target=/var/cache/apk \
-#    apk --update add ca-certificates tzdata && update-ca-certificates
+RUN apk add --no-cache ca-certificates tzdata && \
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo 'Asia/Shanghai' > /etc/timezone
 
 # RUN chmod 1777 /tmp
 # # 创建一个非特权用户来运行应用，增强容器安全性
@@ -73,12 +74,14 @@ ARG GATEWAY_PORT=8080
 
 # USER appuser
 
+# 创建应用目录结构
+RUN mkdir -p /app/dynamic-config/tls
+
+# 设置默认工作目录
+WORKDIR /app
+
 # 指定容器对外暴露的端口号
 EXPOSE $GATEWAY_PORT
-
-RUN mkdir -p /app/dynamic-config
-
-WORKDIR /app/dynamic-config
 
 # 设置容器启动时执行的命令
 CMD ["/app/gateway", "-conf", "/app/dynamic-config/config.yaml"]

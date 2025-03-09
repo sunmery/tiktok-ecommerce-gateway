@@ -13,6 +13,7 @@ message Gateway {
     repeated string hosts = 3 [deprecated = true];
     repeated Endpoint endpoints = 4;
     repeated Middleware middlewares = 5;
+    map<string, string> envs = 6;
 }
 
 message PriorityConfig {
