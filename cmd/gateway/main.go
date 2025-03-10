@@ -6,6 +6,7 @@ import (
 	"github.com/go-kratos/gateway/client"
 	"github.com/go-kratos/gateway/config"
 	configLoader "github.com/go-kratos/gateway/config/config-loader"
+	"github.com/go-kratos/gateway/constants"
 	"github.com/go-kratos/gateway/discovery"
 	"github.com/go-kratos/gateway/middleware"
 	"github.com/go-kratos/gateway/middleware/jwt"
@@ -53,41 +54,9 @@ var (
 	withDebug         bool
 )
 
-// 在main函数前添加以下中间件实现
-// main.go
-func downloadEssentialFiles() {
-	// 创建证书目录
-	if err := os.MkdirAll("./dynamic-config/tls", 0755); err != nil {
-		log.Fatalf("创建证书目录失败: %v", err)
-	}
-
-	// 获取环境变量并去除consul://前缀
-	dsn := strings.TrimPrefix(os.Getenv("discoveryDsn"), "consul://")
-
-	fileLoader, err := loader.NewConsulFileLoader(
-		dsn, // 格式应为 99.suyiiyii.top:3026
-		"ecommerce/gateway",
-	)
-	if err != nil {
-		log.Fatalf("Consul 文件加载器初始化失败: %v", err)
-	}
-
-	requiredFiles := map[string]string{
-		"tls/gateway.crt":    "./dynamic-config/tls/gateway.crt",
-		"tls/gateway.key":    "./dynamic-config/tls/gateway.key",
-		"secrets/public.pem": "./dynamic-config/public.pem",
-	}
-
-	for src, dst := range requiredFiles {
-		if err := fileLoader.DownloadFile(src, dst); err != nil {
-			log.Fatalf("文件下载失败 [%s -> %s]: %v", src, dst, err)
-		}
-		log.Infof("成功下载文件: %s -> %s", src, dst)
-	}
-}
 func init() {
 	initConfig()             // 1. 读取基础环境变量
-	downloadEssentialFiles() // 2. 下载必要文件
+	loader.DownloadEssentialFiles() // 2. 下载必要文件
 }
 
 func main() {
@@ -202,7 +171,7 @@ func main() {
 func initConfig() {
 	rand.Seed(uint64(time.Now().Nanosecond()))
 	// 代理地址解析优化
-	envAddrs := os.Getenv("proxyAddrs")
+	envAddrs := os.Getenv(constants.ProxyAddrs)
 	if envAddrs == "" {
 		// 环境变量未设置时使用默认值
 		proxyAddrs = []string{":8080"}
@@ -222,18 +191,18 @@ func initConfig() {
 			proxyAddrs = validAddrs
 		}
 	}
-	withDebug = os.Getenv("DEBUG") == "true"
-	proxyConfig = os.Getenv("configPath")
+	withDebug = os.Getenv(constants.Debug) == "true"
+	proxyConfig = os.Getenv(constants.DiscoveryConfigPath)
 	if proxyConfig == "" {
 		proxyConfig = "config.yaml" // 默认值
 	}
-	priorityConfigDir = os.Getenv("priorityConfigDir")
+	priorityConfigDir = os.Getenv(constants.PriorityConfigDir)
 	ctrlName = os.Getenv("CTRL_NAME")
 	if ctrlName == "" {
 		ctrlName = os.Getenv("advertiseName")
 	}
 	ctrlService = os.Getenv("ctrlService")
-	discoveryDSN = os.Getenv("discoveryDsn")
+	discoveryDSN = os.Getenv(constants.DiscoveryDsn)
 	if discoveryDSN == "" {
 		discoveryDSN = "localhost:8500"
 	}

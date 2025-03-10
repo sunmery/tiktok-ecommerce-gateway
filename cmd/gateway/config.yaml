@@ -4,18 +4,6 @@
 name: gateway
 version: v1.4.0
 
-# 环境变量
-envs:
-  # HTTPS
-  certFile: "dynamic-config/tls/gateway.crt"
-  keyFile: "dynamic-config/tls/gateway.key"
-  # REDIS缓存RBAC策略的地址
-  redisAddr: "redisAddrp:6379"
-  # 服务发现
-  discoveryDsn: "consul://discovery:8500"
-  # JWT 公钥证书
-  jwtPubkeyPath: "dynamic-config/public.pem"
-
 middlewares:
   # 前端跨域选项
   - name: cors

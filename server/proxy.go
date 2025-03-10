@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/go-kratos/gateway/constants"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,22 +22,22 @@ var (
 
 func init() {
 	var err error
-	if v := os.Getenv("PROXY_READ_HEADER_TIMEOUT"); v != "" {
+	if v := os.Getenv(constants.ProxyReadHeaderTimeout); v != "" {
 		if readHeaderTimeout, err = time.ParseDuration(v); err != nil {
 			panic(err)
 		}
 	}
-	if v := os.Getenv("PROXY_READ_TIMEOUT"); v != "" {
+	if v := os.Getenv(constants.ProxyReadTimeout); v != "" {
 		if readTimeout, err = time.ParseDuration(v); err != nil {
 			panic(err)
 		}
 	}
-	if v := os.Getenv("PROXY_WRITE_TIMEOUT"); v != "" {
+	if v := os.Getenv(constants.ProxyWriteTimeout); v != "" {
 		if writeTimeout, err = time.ParseDuration(v); err != nil {
 			panic(err)
 		}
 	}
-	if v := os.Getenv("PROXY_IDLE_TIMEOUT"); v != "" {
+	if v := os.Getenv(constants.ProxyIdleTimeout); v != "" {
 		if idleTimeout, err = time.ParseDuration(v); err != nil {
 			panic(err)
 		}
@@ -51,8 +52,8 @@ type ProxyServer struct {
 // NewProxy new a gateway server.
 func NewProxy(handler http.Handler, addr string) *ProxyServer {
 	// TLS
-	certFile := os.Getenv("certFile")
-	keyFile := os.Getenv("keyFile")
+	certFile := os.Getenv(constants.CrtFile)
+	keyFile := os.Getenv(constants.KeyFile)
 
 	// 获取当前工作目录
 	wd, _ := os.Getwd()

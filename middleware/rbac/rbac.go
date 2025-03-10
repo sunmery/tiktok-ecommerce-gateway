@@ -8,20 +8,20 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
+	"github.com/go-kratos/gateway/constants"
 	"github.com/go-kratos/gateway/middleware"
 	"github.com/go-kratos/gateway/pkg/loader"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	consulPrefix    = "ecommerce/gateway" // Consul存储前缀
-	localPolicyFile = "dynamic-config/policies/policies.csv"
-	localModelFile  = "dynamic-config/policies/rbac_model.conf"
+	consulPrefix = "ecommerce/gateway" // Consul存储前缀
 )
 
 var (
@@ -29,16 +29,43 @@ var (
 	NotAuthZ             = errors.New("权限不足")
 	syncedCachedEnforcer *casbin.SyncedCachedEnforcer
 	cache                = NewCache(5*time.Minute, 10*time.Minute)
-	casdoorUrl           = os.Getenv("casdoorUrl")
-	userOwner            = "tiktok"
-	userIdMetadataKey    = "x-md-global-user-id"
+	casdoorUrl           = os.Getenv(constants.CasdoorUrl)
+	userOwner            = constants.UserOwner
+	userIdMetadataKey    = constants.UserIdMetadataKey
 	initialized          bool
+	localPolicyFile      = os.Getenv(constants.PoliciesfilePath) // 策略文件路径
+	localModelFile       = os.Getenv(constants.ModelFilePath)  // 模型文件路径
 )
 
 // InitEnforcer 初始化RBAC系统
 func InitEnforcer() {
 	if initialized {
 		return
+	}
+
+	// 默认值
+	if localModelFile == "" {
+		localModelFile = filepath.Join(constants.ConfigDir, constants.RBACDirName, constants.ModelFileFileName)
+	}
+	if localPolicyFile == "" {
+		localPolicyFile = filepath.Join(constants.ConfigDir, constants.RBACDirName, constants.PoliciesfileName)
+	}
+
+	// 确保目录存在
+	if err := os.MkdirAll(filepath.Dir(localPolicyFile), 0755); err != nil {
+		panic(fmt.Sprintf("创建策略目录失败: %v", err))
+	}
+
+	// 添加路径验证日志
+	log.Printf("策略文件路径: %s", localPolicyFile)
+	log.Printf("模型文件路径: %s", localModelFile)
+
+	// 检查文件是否存在
+	if _, err := os.Stat(localPolicyFile); os.IsNotExist(err) {
+		panic(fmt.Sprintf("策略文件不存在: %s", localPolicyFile))
+	}
+	if _, err := os.Stat(localModelFile); os.IsNotExist(err) {
+		panic(fmt.Sprintf("模型文件不存在: %s", localModelFile))
 	}
 
 	middleware.Register("rbac", Middleware)
@@ -67,7 +94,7 @@ func InitEnforcer() {
 
 // initPolicyLoader 初始化Consul文件加载器
 func initPolicyLoader() {
-	consulAddr := strings.TrimPrefix(os.Getenv("discoveryDsn"), "consul://")
+	consulAddr := strings.TrimPrefix(os.Getenv(constants.DiscoveryDsn), "consul://")
 	var err error
 	policyLoader, err = loader.NewConsulFileLoader(consulAddr, consulPrefix)
 	if err != nil {
@@ -77,14 +104,16 @@ func initPolicyLoader() {
 
 // syncPolicyFiles 同步策略和模型文件
 func syncPolicyFiles() error {
-	// 同步策略文件
-	if err := policyLoader.DownloadFile("policies.csv", localPolicyFile); err != nil {
-		return fmt.Errorf("下载策略文件失败: %w", err)
+	// 策略
+	remotePolicyPath := filepath.Join(constants.RBACDirName, constants.PoliciesfileName)
+	if err := policyLoader.DownloadFile(remotePolicyPath, localPolicyFile); err != nil {
+		return fmt.Errorf("下载策略文件失败: %w (远程路径: %s)", err, remotePolicyPath)
 	}
 
-	// 同步模型文件
-	if err := policyLoader.DownloadFile("rbac_model.conf", localModelFile); err != nil {
-		return fmt.Errorf("下载模型文件失败: %w", err)
+	// 模型
+	remoteModelPath := filepath.Join( constants.RBACDirName, constants.ModelFileFileName)
+	if err := policyLoader.DownloadFile(remoteModelPath, localModelFile); err != nil {
+		return fmt.Errorf("下载模型文件失败: %w (远程路径: %s)", err, remoteModelPath)
 	}
 	return nil
 }
@@ -94,12 +123,17 @@ func createEnforcer() error {
 	// 加载RBAC模型
 	modelContent, err := os.ReadFile(localModelFile)
 	if err != nil {
-		return fmt.Errorf("读取模型文件失败: %w", err)
+		return fmt.Errorf("读取模型文件失败: %w (路径: %s)", err, localModelFile)
 	}
+
+	// 打印模型内容用于调试
+	log.Printf("========= 加载的模型文件内容 =========")
+	log.Printf("%s", modelContent)
+	log.Printf("====================================")
 
 	m, err := model.NewModelFromString(string(modelContent))
 	if err != nil {
-		return fmt.Errorf("解析模型失败: %w", err)
+		return fmt.Errorf("解析模型失败: %w (内容: %s)", err, string(modelContent))
 	}
 
 	// 使用文件适配器
@@ -134,23 +168,29 @@ func watchPolicyChanges() {
 // checkPolicyUpdate 检查策略文件更新
 func checkPolicyUpdate() bool {
 	tempFile := localPolicyFile + ".tmp"
-	defer func(name string) {
-		err := os.Remove(name)
-		if err != nil {
-			return
-		}
-	}(tempFile)
+	defer os.Remove(tempFile) // 确保临时文件最终被清理
 
-	// 下载最新策略到临时文件
-	if err := policyLoader.DownloadFile("policies.csv", tempFile); err != nil {
+	// 1. 下载最新策略到临时文件
+	consulPath := filepath.Join(constants.RBACDirName, constants.PoliciesfileName)
+	if err := policyLoader.DownloadFile(consulPath, tempFile); err != nil {
 		log.Printf("策略更新检查失败: %v", err)
 		return false
 	}
 
-	// 对比文件内容
+	// 2. 对比内容
 	currentContent, _ := os.ReadFile(localPolicyFile)
 	newContent, _ := os.ReadFile(tempFile)
-	return string(currentContent) != string(newContent)
+	if string(currentContent) == string(newContent) {
+		return false // 内容相同无需更新
+	}
+
+	// 3. 覆盖本地策略文件
+	if err := os.Rename(tempFile, localPolicyFile); err != nil {
+		log.Printf("策略文件替换失败: %v", err)
+		return false
+	}
+	log.Printf("策略文件已更新")
+	return true
 }
 
 type Cache struct {

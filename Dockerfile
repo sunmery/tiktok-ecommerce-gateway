@@ -75,7 +75,8 @@ RUN apk add --no-cache ca-certificates tzdata && \
 # USER appuser
 
 # 创建应用目录结构
-RUN mkdir -p /app/dynamic-config/tls
+RUN mkdir -pv ./dynamic-config/{tls,policies}
+RUN ls -l ./dynamic-config/
 
 # 设置默认工作目录
 WORKDIR /app
