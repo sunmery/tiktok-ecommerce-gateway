@@ -3,6 +3,15 @@
 # 配置热更新：修改Consul中的配置或本地优先级目录的配置，确认应用能动态加载新配置
 name: gateway
 version: v1.4.0
+# 环境变量
+envs:
+  # HTTPS
+  CRT_FILE_PATH: "dynamic-config/tls/gateway.crt"
+  KEY_FILE_PATH: "dynamic-config/tls/gateway.key"
+  # 服务发现
+  DISCOVERY_DSN: "consul://99.suyiiyii.top:3026"
+  # JWT 公钥证书
+  JWT_PUBKEY_PATH: "dynamic-config/secrets/public.pem"
 
 middlewares:
   # 前端跨域选项
@@ -21,6 +30,7 @@ middlewares:
       allowOrigins:
         - http://localhost:3000
         - https://localhost
+        - http://localhost:8443
         - https://localhost:8443
         - localhost:3000
         - .apikv.com

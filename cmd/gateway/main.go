@@ -55,12 +55,13 @@ var (
 )
 
 func init() {
-	initConfig()             // 1. 读取基础环境变量
-	loader.DownloadEssentialFiles() // 2. 下载必要文件
+	initConfig() // 1. 读取基础环境变量
+	if !loader.IsLocalMode() {
+		loader.DownloadEssentialFiles()
+	}
 }
 
 func main() {
-
 	// 3. 加载主配置（会设置环境变量）
 	confLoader, err := config.NewFileLoader(proxyConfig, priorityConfigDir)
 	if err != nil {
@@ -109,10 +110,6 @@ func main() {
 		go ctrlLoader.Run(ctx)
 	}
 
-	// confLoader, err := config.NewFileLoader(proxyConfig, priorityConfigDir)
-	// if err != nil {
-	// 	log.Fatalf("failed to create config file loader: %v", err)
-	// }
 	defer confLoader.Close()
 	// bc, err := confLoader.Load(context.Background())
 	// if err != nil {
