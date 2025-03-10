@@ -16,13 +16,14 @@ const (
 	// JwtPubkeyPath JWT公钥路径
 	JwtPubkeyPath = "JWT_PUBKEY_PATH"
 
-	// TlsDir TLS 配置
+	// TLS TLS 配置
+	TLS     = "TLS"
 	TlsDir  = "TLS_DIR"
 	CrtFile = "CRT_FILE_PATH"
 	KeyFile = "KEY_FILE_PATH"
 
 	PoliciesfilePath = "POLICIES_FILE_PATH"
-	ModelFilePath= "MODEL_FILE_PATH"
+	ModelFilePath    = "MODEL_FILE_PATH"
 
 	CasdoorUrl = "CASDOOR_URL"
 
@@ -65,7 +66,8 @@ const (
 	PoliciesfileName  = "policies.csv"
 	ModelFileFileName = "model.conf"
 
-	// TlsDirName TLS 配置
+	// UseTLS TLS 配置
+	UseTLS      = "false"
 	TlsDirName  = "tls"
 	CrtFileName = "gateway.crt"
 	KeyFileName = "gateway.key"
