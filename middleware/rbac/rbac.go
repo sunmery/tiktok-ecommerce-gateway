@@ -39,53 +39,59 @@ var (
 )
 
 // InitEnforcer 初始化RBAC系统
-func InitEnforcer() {
+func InitEnforcer() error {
 	if initialized {
-		return
+		return nil
 	}
 
-	initPaths()
+	initPathsErr := initPaths()
+	if initPathsErr != nil {
+		return initPathsErr
+	}
 
 	load, err := loader.GetConsulLoader()
 	if err != nil {
 		logger.Errorf("获取Consul加载器失败: %v", err)
-		panic(err)
+		return err
 	}
 
 	if err := syncEssentialFiles(load); err != nil {
 		logger.Errorf("文件同步失败: %v", err)
-		panic(err)
+		return err
 	}
 
 	if err := initializeEnforcer(); err != nil {
 		logger.Errorf("执行器初始化失败: %v", err)
-		panic(err)
+		return err
 	}
 
 	setupWatchers(load)
 	middleware.Register("rbac", Middleware)
 	initialized = true
 	logger.Info("RBAC系统初始化完成")
+
+	return err
 }
 
-func initPaths() {
+func initPaths() error {
 	if localModelFile == "" {
 		localModelFile = filepath.Join(constants.ConfigDir, constants.RBACDirName, constants.ModelFileFileName)
 	}
 	if localPolicyFile == "" {
 		localPolicyFile = filepath.Join(constants.ConfigDir, constants.RBACDirName, constants.PoliciesfileName)
 	}
-	logger.Infof("策略文件路径: %s | 模型文件路径: %s", localPolicyFile, localModelFile)
+	logger.Debugf("策略文件路径: %s | 模型文件路径: %s", localPolicyFile, localModelFile)
 
 	if err := os.MkdirAll(filepath.Dir(localPolicyFile), 0o755); err != nil {
 		logger.Errorf("创建策略目录失败: %v", err)
-		panic(err)
+		return err
 	}
+	return nil
 }
 
 func syncEssentialFiles(load *loader.ConsulFileLoader) error {
 	logger.Info("开始同步策略文件...")
-	defer logger.Info("文件同步完成")
+	defer logger.Debugf("文件同步完成")
 
 	if err := load.SyncFile(
 		path.Join(constants.RBACDirName, constants.PoliciesfileName),

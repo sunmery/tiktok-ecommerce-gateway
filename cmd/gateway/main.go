@@ -3,6 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/go-kratos/gateway/client"
 	"github.com/go-kratos/gateway/config"
 	configLoader "github.com/go-kratos/gateway/config/config-loader"
@@ -14,10 +19,6 @@ import (
 	"github.com/go-kratos/gateway/pkg/loader"
 	"github.com/go-kratos/gateway/proxy/auth"
 	"golang.org/x/exp/rand"
-	"net/http"
-	"os"
-	"strings"
-	"time"
 
 	"github.com/go-kratos/gateway/proxy"
 	"github.com/go-kratos/gateway/proxy/debug"
@@ -57,7 +58,7 @@ var (
 func init() {
 	initConfig() // 1. 读取基础环境变量
 	// if !loader.IsLocalMode() {
-		loader.DownloadEssentialFiles()
+	loader.DownloadEssentialFiles()
 	// }
 }
 
@@ -83,7 +84,10 @@ func main() {
 	}
 
 	// 5. 初始化中间件
-	jwt.Init()          // JWT 中间件初始化
+	jwtErr := jwt.Init()
+	if err != nil {
+		log.Fatalf("JWT 中间件初始化失败: %v", jwtErr)
+	} // JWT 中间件初始化
 	rbac.InitEnforcer() // RBAC 中间件初始化
 
 	// 根据传入的服务发现创建客户端工厂

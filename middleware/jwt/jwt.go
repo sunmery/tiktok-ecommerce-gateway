@@ -122,7 +122,7 @@ func reloadPublicKey() error {
 	// 检查文件是否最新
 	_, err := os.Stat(publicKeyPath)
 	if err != nil {
-		return fmt.Errorf("文件状态获取失败: %w", err)
+		return log.Errorf("文件状态获取失败: %w", err)
 	}
 
 	data, err := os.ReadFile(publicKeyPath)
