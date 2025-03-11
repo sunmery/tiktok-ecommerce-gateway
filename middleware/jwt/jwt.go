@@ -31,7 +31,7 @@ var (
 	publicKey         *rsa.PublicKey
 	publicKeyLoader   *loader.ConsulFileLoader // 新增 Consul 加载器
 	publicKeyPath     string
-	keyReloadInterval = 5 * time.Second // 公钥重载间隔
+	keyReloadInterval = 30 * time.Second // 公钥重载间隔
 	initialized       bool
 	mu                sync.RWMutex // 公钥更新锁
 )

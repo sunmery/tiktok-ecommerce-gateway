@@ -13,9 +13,11 @@ import (
 	"github.com/go-kratos/gateway/pkg/loader"
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/consul/api/watch"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -23,21 +25,21 @@ import (
 )
 
 const (
-	consulPrefix = "ecommerce/gateway" // Consul存储前缀
+	consulPrefix = "ecommerce/gateway"
 )
 
 var (
 	policyLoader         *loader.ConsulFileLoader
 	NotAuthZ             = errors.New("权限不足")
 	syncedCachedEnforcer *casbin.SyncedCachedEnforcer
-	enforcerMutex        sync.RWMutex // 新增互斥锁
+	enforcerMutex        sync.RWMutex
 	cache                = NewCache(5*time.Minute, 10*time.Minute)
 	casdoorUrl           = os.Getenv(constants.CasdoorUrl)
 	userOwner            = constants.UserOwner
 	userIdMetadataKey    = constants.UserIdMetadataKey
 	initialized          bool
-	localPolicyFile      = os.Getenv(constants.PoliciesfilePath) // 策略文件路径
-	localModelFile       = os.Getenv(constants.ModelFilePath)    // 模型文件路径
+	localPolicyFile      = os.Getenv(constants.PoliciesfilePath)
+	localModelFile       = os.Getenv(constants.ModelFilePath)
 )
 
 // InitEnforcer 初始化RBAC系统
@@ -46,7 +48,22 @@ func InitEnforcer() {
 		return
 	}
 
-	// 默认值
+	// 初始化路径和日志
+	initPaths()
+	middleware.Register("rbac", Middleware)
+	initialized = true
+
+	initPolicyLoader()
+
+	if err := initializeEnforcer(); err != nil {
+		panic(fmt.Sprintf("RBAC初始化失败: %v", err))
+	}
+
+	go watchPolicyChanges()
+	log.Println("[RBAC] 初始化完成，开始监听策略变更")
+}
+
+func initPaths() {
 	if localModelFile == "" {
 		localModelFile = filepath.Join(constants.ConfigDir, constants.RBACDirName, constants.ModelFileFileName)
 	}
@@ -54,43 +71,28 @@ func InitEnforcer() {
 		localPolicyFile = filepath.Join(constants.ConfigDir, constants.RBACDirName, constants.PoliciesfileName)
 	}
 
-	// 确保目录存在
 	if err := os.MkdirAll(filepath.Dir(localPolicyFile), 0755); err != nil {
 		panic(fmt.Sprintf("创建策略目录失败: %v", err))
 	}
 
-	// 添加路径验证日志
-	log.Printf("策略文件路径: %s", localPolicyFile)
-	log.Printf("模型文件路径: %s", localModelFile)
-
-	// 检查文件是否存在
-	if _, err := os.Stat(localPolicyFile); os.IsNotExist(err) {
-		panic(fmt.Sprintf("策略文件不存在: %s", localPolicyFile))
-	}
-	if _, err := os.Stat(localModelFile); os.IsNotExist(err) {
-		panic(fmt.Sprintf("模型文件不存在: %s", localModelFile))
-	}
-
-	middleware.Register("rbac", Middleware)
-	initialized = true
-
-	initPolicyLoader()
-
-	// 首次同步策略文件
-	if err := syncPolicyFiles(); err != nil {
-		panic(fmt.Sprintf("初始化策略文件失败: %v", err))
-	}
-
-	// 创建执行器
-	if err := createEnforcer(); err != nil {
-		panic(fmt.Sprintf("创建enforcer失败: %v", err))
-	}
-
-	// 启动策略监听
-	go watchPolicyChanges()
+	log.Printf("[RBAC] 策略文件路径: %s\n模型文件路径: %s", localPolicyFile, localModelFile)
+	checkFileExists(localPolicyFile)
+	checkFileExists(localModelFile)
 }
 
-// initPolicyLoader 初始化Consul文件加载器
+func checkFileExists(path string) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		panic(fmt.Sprintf("文件不存在: %s", path))
+	}
+}
+
+func initializeEnforcer() error {
+	if err := syncPolicyFiles(); err != nil {
+		return fmt.Errorf("策略文件同步失败: %w", err)
+	}
+	return createEnforcer()
+}
+
 func initPolicyLoader() {
 	consulConfig := api.DefaultConfig()
 	consulConfig.Address = strings.TrimPrefix(os.Getenv(constants.DiscoveryDsn), "consul://")
@@ -106,199 +108,148 @@ func initPolicyLoader() {
 	}
 }
 
-// syncPolicyFiles 同步策略和模型文件
 func syncPolicyFiles() error {
-	// 策略
-	remotePolicyPath := filepath.Join(constants.RBACDirName, constants.PoliciesfileName)
-	if err := policyLoader.DownloadFile(remotePolicyPath, localPolicyFile); err != nil {
-		return fmt.Errorf("下载策略文件失败: %w (远程路径: %s)", err, remotePolicyPath)
+	log.Println("[SYNC] 开始同步策略文件...")
+	defer log.Println("[SYNC] 文件同步完成")
+
+	if err := downloadFile(constants.PoliciesfileName, localPolicyFile); err != nil {
+		return err
+	}
+	return downloadFile(constants.ModelFileFileName, localModelFile)
+}
+
+func downloadFile(remoteName, localPath string) error {
+	log.Printf("[SYNC] 正在下载文件 %s => %s", remoteName, localPath)
+
+	// 先下载到临时文件
+	tempFile := localPath + ".tmp"
+	defer os.Remove(tempFile)
+
+	if err := policyLoader.DownloadFile(
+		path.Join(constants.RBACDirName, remoteName),
+		tempFile,
+	); err != nil {
+		return fmt.Errorf("文件下载失败: %w", err)
 	}
 
-	// 模型
-	remoteModelPath := filepath.Join(constants.RBACDirName, constants.ModelFileFileName)
-	if err := policyLoader.DownloadFile(remoteModelPath, localModelFile); err != nil {
-		return fmt.Errorf("下载模型文件失败: %w (远程路径: %s)", err, remoteModelPath)
+	// 校验文件内容
+	newContent, _ := os.ReadFile(tempFile)
+	if len(newContent) == 0 {
+		return fmt.Errorf("下载到空文件: %s", remoteName)
 	}
+
+	// 原子替换文件
+	if err := os.Rename(tempFile, localPath); err != nil {
+		return fmt.Errorf("文件替换失败: %w", err)
+	}
+	log.Printf("[SYNC] 文件更新成功: %s (大小: %d字节)", localPath, len(newContent))
 	return nil
 }
 
-// createEnforcer 创建Casbin执行器
 func createEnforcer() error {
-	version := fmt.Sprintf("%d", time.Now().UnixNano())
-	if err := os.WriteFile(filepath.Join(filepath.Dir(localModelFile), "version"), []byte(version), 0644); err != nil {
-		log.Printf("版本标记写入失败: %v", err)
-	}
-	log.Printf("新建Enforcer版本: %s", version)
-
 	enforcerMutex.Lock()
 	defer enforcerMutex.Unlock()
 
-	// 停止旧的自动加载
 	if syncedCachedEnforcer != nil {
 		syncedCachedEnforcer.StopAutoLoadPolicy()
 	}
 
-	// 加载RBAC模型
 	modelContent, err := os.ReadFile(localModelFile)
 	if err != nil {
-		return fmt.Errorf("读取模型文件失败: %w (路径: %s)", err, localModelFile)
+		return fmt.Errorf("读取模型文件失败: %w", err)
 	}
+	log.Printf("[MODEL] 加载模型内容:\n%s", modelContent)
 
-	// 打印模型内容用于调试
-	log.Printf("========= 加载的模型文件内容 =========")
-	log.Printf("%s", modelContent)
-	log.Printf("====================================")
-
-	m, err := model.NewModelFromString(string(modelContent))
-	if err != nil {
-		return fmt.Errorf("解析模型失败: %w (内容: %s)", err, string(modelContent))
-	}
-
-	// 使用文件适配器
+	m, _ := model.NewModelFromString(string(modelContent))
 	adapter := fileadapter.NewAdapter(localPolicyFile)
 
-	// 初始化带缓存的执行器
-	syncedCachedEnforcer, err = casbin.NewSyncedCachedEnforcer(m, adapter)
-	if err != nil {
+	if syncedCachedEnforcer, err = casbin.NewSyncedCachedEnforcer(m, adapter); err != nil {
 		return fmt.Errorf("创建执行器失败: %w", err)
 	}
 
-	// 设置自动加载策略间隔
 	syncedCachedEnforcer.StartAutoLoadPolicy(1 * time.Minute)
-
 	return nil
 }
 
-// watchPolicyChanges 策略文件变化监听, 使用Consul Watch机制
 func watchPolicyChanges() {
-	// 创建单独的goroutine监控策略文件和模型文件
-	go watchConsulKey("rbac/policies.csv", onPolicyUpdate)
-	go watchConsulKey("rbac/model.conf", onModelUpdate)
+	startConsulWatch("rbac/policies.csv", onPolicyUpdate)
+	startConsulWatch("rbac/model.conf", onModelUpdate)
 }
 
-// 策略文件更新处理
+func startConsulWatch(keyPath string, callback func()) {
+	fullPath := path.Join(consulPrefix, keyPath)
+	log.Printf("[WATCH] 启动监听: %s", fullPath)
+
+	params := map[string]interface{}{
+		"type": "key",
+		"key":  fullPath,
+	}
+
+	watcher, err := watch.Parse(params)
+	if err != nil {
+		log.Printf("[WATCH] 创建监视器失败: %v", err)
+		return
+	}
+
+	watcher.Handler = func(idx uint64, data interface{}) {
+		if kv, ok := data.(*api.KVPair); ok {
+			log.Printf("[WATCH] 检测到变更: %s (版本: %d)", fullPath, kv.ModifyIndex)
+			callback()
+		}
+	}
+
+	// 带重试的持续监听
+	for {
+		if err := watcher.RunWithClientAndHclog(policyLoader.Client, nil); err != nil {
+			log.Printf("[WATCH] 监听错误: %v (5秒后重试)", err)
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
 func onPolicyUpdate() {
-	log.Println("检测到策略文件变更")
+	log.Println("[UPDATE] 检测到策略变更，开始处理...")
+	defer log.Println("[UPDATE] 策略处理完成")
+
+	// 先同步最新策略文件
+	if err := downloadFile(constants.PoliciesfileName, localPolicyFile); err != nil {
+		log.Printf("[ERROR] 策略文件下载失败: %v", err)
+		return
+	}
+
 	enforcerMutex.RLock()
 	defer enforcerMutex.RUnlock()
 
 	if err := syncedCachedEnforcer.LoadPolicy(); err != nil {
-		log.Printf("策略重载失败: %v", err)
+		log.Printf("[ERROR] 策略重载失败: %v", err)
 		return
 	}
-	log.Println("策略更新成功")
+	log.Println("[UPDATE] 策略重载成功")
 }
 
-// 模型文件更新处理
 func onModelUpdate() {
-	log.Println("检测到模型文件变更")
+	log.Println("[UPDATE] 检测到模型变更，开始处理...")
+	defer log.Println("[UPDATE] 模型处理完成")
+
 	if err := reloadModelAndPolicy(); err != nil {
-		log.Printf("模型重载失败: %v", err)
+		log.Printf("[ERROR] 模型重载失败: %v", err)
 		return
 	}
-	log.Println("模型更新成功")
+	log.Println("[UPDATE] 模型更新成功")
 }
 
-// 带原子性的模型和策略重载
 func reloadModelAndPolicy() error {
 	enforcerMutex.Lock()
 	defer enforcerMutex.Unlock()
 
-	// 重新下载模型文件
-	if err := policyLoader.DownloadFile(
-		filepath.Join(constants.RBACDirName, constants.ModelFileFileName),
-		localModelFile,
-	); err != nil {
-		return fmt.Errorf("模型文件下载失败: %w", err)
+	log.Println("[RELOAD] 开始全量重载...")
+	if err := syncPolicyFiles(); err != nil {
+		return err
 	}
-
-	// 重新下载策略文件
-	if err := policyLoader.DownloadFile(
-		filepath.Join(constants.RBACDirName, constants.PoliciesfileName),
-		localPolicyFile,
-	); err != nil {
-		return fmt.Errorf("策略文件下载失败: %w", err)
-	}
-
-	// 重新创建Enforcer
-	if err := createEnforcer(); err != nil {
-		return fmt.Errorf("enforcer重建失败: %w", err)
-	}
-	return nil
+	return createEnforcer()
 }
 
-// 通用Consul key监控函数
-func watchConsulKey(keyPath string, callback func()) {
-	// 构造watch参数
-	params := make(map[string]interface{})
-	params["type"] = "key"
-	params["key"] = filepath.Join(consulPrefix, keyPath)
-
-	// 初始化watch
-	watcher, err := watch.Parse(params)
-	if err != nil {
-		log.Printf("创建Consul监视器失败: %v (路径: %s)", err, params["key"])
-		return
-	}
-
-	// 错误处理重试机制
-	retries := 0
-	maxRetries := 3
-
-	for {
-		// 启动监视
-		watcher.Handler = func(idx uint64, data interface{}) {
-			if data == nil {
-				return // 忽略空数据
-			}
-
-			// 触发回调并重置重试计数
-			callback()
-			retries = 0
-		}
-
-		// 带超时和重试的运行
-		if err := watcher.RunWithClientAndHclog(policyLoader.Client(), nil); err != nil {
-			log.Printf("Consul监视失败: %v (路径: %s)", err, params["key"])
-
-			if retries >= maxRetries {
-				log.Printf("达到最大重试次数(%d)，停止监控: %s", maxRetries, keyPath)
-				return
-			}
-
-			retries++
-			time.Sleep(time.Duration(retries) * time.Second * 2) // 指数退避
-		}
-	}
-}
-
-// checkPolicyUpdate 检查策略文件更新
-func checkPolicyUpdate() bool {
-	tempFile := localPolicyFile + ".tmp"
-	defer os.Remove(tempFile) // 确保临时文件最终被清理
-
-	// 1. 下载最新策略到临时文件
-	consulPath := filepath.Join(constants.RBACDirName, constants.PoliciesfileName)
-	if err := policyLoader.DownloadFile(consulPath, tempFile); err != nil {
-		log.Printf("策略更新检查失败: %v", err)
-		return false
-	}
-
-	// 2. 对比内容
-	currentContent, _ := os.ReadFile(localPolicyFile)
-	newContent, _ := os.ReadFile(tempFile)
-	if string(currentContent) == string(newContent) {
-		return false // 内容相同无需更新
-	}
-
-	// 3. 覆盖本地策略文件
-	if err := os.Rename(tempFile, localPolicyFile); err != nil {
-		log.Printf("策略文件替换失败: %v", err)
-		return false
-	}
-	log.Printf("策略文件已更新")
-	return true
-}
+// 以下缓存相关代码保持不变...
 
 type Cache struct {
 	items    map[string]cacheItem
@@ -346,9 +297,7 @@ func (c *Cache) Set(key string, value interface{}) {
 	}
 }
 
-type JwtOptions struct {
-	SkipPaths []string `json:"skip_paths"`
-}
+// 中间件和角色获取逻辑保持不变...
 
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 	var routerFilter *config.Middleware_RouterFilter
@@ -418,7 +367,6 @@ func getUserRoles(userID string) (string, error) {
 	cache.Set(userID, role)
 	return role, nil
 }
-
 func fetchRolesFromCasdoor(userID string) (string, error) {
 	id := fmt.Sprintf("%s/%s", userOwner, userID)
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/get-user?id=%s&owner=%s", casdoorUrl, id, userOwner), nil)
@@ -431,7 +379,13 @@ func fetchRolesFromCasdoor(userID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("casdoor接口调用失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("关闭响应体失败: %v", err)
+			return
+		}
+	}(resp.Body)
 
 	var result struct {
 		Data struct {
@@ -452,6 +406,8 @@ func fetchRolesFromCasdoor(userID string) (string, error) {
 	}
 	return role, nil
 }
+
+// 清理器保持原样...
 
 type cacheJanitor struct {
 	Interval time.Duration

@@ -5,6 +5,7 @@ import (
 	"github.com/go-kratos/gateway/constants"
 	"github.com/go-kratos/kratos/v2/log"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -12,8 +13,8 @@ import (
 )
 
 type ConsulFileLoader struct {
-	client *api.Client
-	prefix string
+	Client *api.Client
+	Prefix string
 }
 
 func NewConsulFileLoader(address, prefix string) (*ConsulFileLoader, error) {
@@ -21,18 +22,27 @@ func NewConsulFileLoader(address, prefix string) (*ConsulFileLoader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ConsulFileLoader{client: client, prefix: prefix}, nil
+	return &ConsulFileLoader{Client: client, Prefix: prefix}, nil
 }
 
 func (l *ConsulFileLoader) DownloadFile(consulPath, localPath string) error {
-	kv, _, err := l.client.KV().Get(filepath.Join(l.prefix, consulPath), nil)
+	fullPath := path.Join(l.Prefix, consulPath)
+	log.Debugf("[LOADER] 正在下载文件: consul://%s => %s", fullPath, localPath)
+
+	kv, _, err := l.Client.KV().Get(fullPath, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("consul请求失败: %w", err)
 	}
 	if kv == nil {
-		return fmt.Errorf("file not found: %s", consulPath)
+		return fmt.Errorf("文件不存在: %s", fullPath)
 	}
-	return os.WriteFile(localPath, kv.Value, 0644)
+
+	if err := os.WriteFile(localPath, kv.Value, 0644); err != nil {
+		return fmt.Errorf("写入本地文件失败: %w", err)
+	}
+
+	log.Debugf("[LOADER] 下载成功: %s (大小: %d字节)", localPath, len(kv.Value))
+	return nil
 }
 
 // DownloadEssentialFiles 下载Consul 远端文件
