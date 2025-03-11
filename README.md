@@ -4,15 +4,16 @@
 
 HTTP -> Proxy -> Router -> Middleware -> Client -> Selector -> Node
 
-# Run
-根据自己的实际情况修改, 查看 `constants` 包下的常量的定义以了解更多的配置:
+## Run
 ```bash
-DISCOVERY_DSN="consul://consul:8500" \
-DISCOVERY_CONFIG_PATH="ecommerce/gateway/config.yaml" \
-kr run
+CASDOOR_URL=http://casdoor:8000 \
+REDIS_ADDR=localhost:6379 \
+DISCOVERY_DSN=consul://localhost:8500 \
+CONFIG_PATH="consul://localhost:8500/kratos/gateway/config.yaml" \
+JWT_PUBKEY_PATH="./public.pem" kr run
 ```
 
-# gRPC
+## gRPC
 gRPC本质上是基于HTTP/2的协议, 它在调用时只使用POST方法, 所以gRPC的method只有POST方法, 所以gRPC的配置和HTTP的配置是一样的, 
 但HTTP路径是你自己定义的, gRPC路径是protoc这些生成器自动根据由服务名和方法名组成的
 
@@ -49,7 +50,7 @@ endpoints:
 
 ```
 
-# 编写自定义中间件
+## 编写自定义中间件
 1. 创建一个目录: ./middleware/routerfilter
 2. 创建一个文件: ./middleware/routerfilter/routerfilter.go
 3. 如果需要配置: : /api/gateway/middleware/routerfilter/routerfilter.proto
@@ -190,7 +191,7 @@ func (s *ProxyServer) Start(ctx context.Context) error {
 
 ```
 
-# Middleware
+## Middleware
 * cors
 * auth
 * color
@@ -203,7 +204,7 @@ func (s *ProxyServer) Start(ctx context.Context) error {
 * rbac: 与casdoor的集成, 使用到了redis来缓存casbin策略, 基于角色的接口的权限控制
 * router_filter: 路由过滤器, 用于过滤掉不需要的路由
 
-## CORS
+### CORS
 
 前端一般都要包含如下请求头:
 ```yaml
@@ -226,7 +227,7 @@ allowHeaders:
 - http://127.0.0.1:3000	127.0.0.1:3000	✅
 如果需要修改, 可以修改`middleware/cors/cors.go`中的代码的`isOriginAllowed` 函数
 
-## RouterFilter
+### RouterFilter
 路由过滤器, 用于过滤掉不需要的路由, 目前只支持正则匹配, 不支持通配符匹配, 不支持前缀匹配, 不支持后缀匹配, 不支持路径参数匹配,
 该 router_filter 中间件支持以下类型的路由规则：
 
@@ -293,11 +294,11 @@ middlewares:
           methods: [GET, DELETE]
 ```
 
-## JWT
+### JWT
 证书使用`x509`生成,4096位大小,加密算法是RS256(RSA+SHA256),有效期20年. 
 证书文件在`/cmd/gatway`目录下, 证书文件名为`public.pem`
 
-## RBAC
+### RBAC
 
 目前使用了官方的casbin的redis插件来缓存策略, 不一定是Redis, 也可以是任何支持redis协议的`rpush`工具即可 
 目前的redis实例是没有设置密码的, 如果需要设置密码, 可以修改`middleware/rbac/rbac.go`中的代码的`initEnforcer` 函数,
