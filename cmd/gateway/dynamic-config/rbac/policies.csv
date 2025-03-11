@@ -2,6 +2,7 @@ p, public, /v1/auth, POST, allow
 p, user, /v1/auth/profile, GET, allow
 p, user, /v1/products, GET, allow
 p, user, /v1/users/*, (GET|POST|PATCH|DELETE), allow
+p, user, /v1/carts, (GET|POST|PATCH|DELETE), allow
 p, user, /v1/carts/*, (GET|POST|DELETE), allow
 p, user, /v1/checkout/*, POST, allow
 p, user, /v1/orders, (GET|POST), allow

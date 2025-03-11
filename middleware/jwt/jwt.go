@@ -15,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,7 +31,7 @@ var (
 	publicKey         *rsa.PublicKey
 	publicKeyLoader   *loader.ConsulFileLoader // 新增 Consul 加载器
 	publicKeyPath     string
-	keyReloadInterval = 5 * time.Minute // 公钥重载间隔
+	keyReloadInterval = 5 * time.Second // 公钥重载间隔
 	initialized       bool
 	mu                sync.RWMutex // 公钥更新锁
 )
@@ -133,8 +134,8 @@ func watchPublicKeyChanges() {
 		defer os.Remove(tempFile)
 
 		// 下载最新公钥到临时文件
-		remoteKeyPath := filepath.Join(consulPrefix, constants.SecretsDirName, constants.JwtPublicFileName)
-		fmt.Println("remoteKeyPath: ", remoteKeyPath)
+		remoteKeyPath := path.Join(constants.SecretsDirName, constants.JwtPublicFileName)
+		log.Infof("远程公钥路径: %s", remoteKeyPath) // 添加调试日志
 		if err := publicKeyLoader.DownloadFile(remoteKeyPath, tempFile); err != nil {
 			log.Errorf("公钥更新检查失败: %v (远程路径: %s)", err, remoteKeyPath)
 			continue
@@ -152,6 +153,7 @@ func watchPublicKeyChanges() {
 			if err := reloadPublicKey(); err != nil {
 				log.Errorf("重载公钥失败: %v", err)
 			}
+			log.Info("公钥重载成功")
 		}
 	}
 }

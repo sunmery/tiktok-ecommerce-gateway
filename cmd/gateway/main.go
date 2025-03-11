@@ -56,9 +56,9 @@ var (
 
 func init() {
 	initConfig() // 1. 读取基础环境变量
-	if !loader.IsLocalMode() {
+	// if !loader.IsLocalMode() {
 		loader.DownloadEssentialFiles()
-	}
+	// }
 }
 
 func main() {

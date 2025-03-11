@@ -74,7 +74,7 @@ func isOriginAllowed(origin string, allowOriginHosts []string) bool {
 			if strings.HasSuffix(hostname, suffix) {
 				return true
 			}
-			// 特殊处理：当配置为 .localhost 时，允许裸域名 localhost（可选）
+			// 特殊处理：当配置为 .localhost 时，允许裸域名 localhost（可选
 			if suffix == ".localhost" && hostname == "localhost" {
 				return true
 			}

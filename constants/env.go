@@ -65,7 +65,7 @@ const (
 	PoliciesfileName  = "policies.csv"
 	ModelFileFileName = "model.conf"
 
-	// TlsDirName TLS 配置
+	UseTLS = "false" // 是否使用TLS
 	TlsDirName  = "tls"
 	CrtFileName = "gateway.crt"
 	KeyFileName = "gateway.key"

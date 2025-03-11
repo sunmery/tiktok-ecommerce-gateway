@@ -6,6 +6,7 @@ version: v1.4.0
 # 环境变量
 envs:
   # HTTPS
+  CASDOOR_URL: https://CASDOOR_URL:8000
   CRT_FILE_PATH: "dynamic-config/tls/gateway.crt"
   KEY_FILE_PATH: "dynamic-config/tls/gateway.key"
   # 服务发现
@@ -32,8 +33,6 @@ middlewares:
         - https://localhost
         - http://localhost:8443
         - https://localhost:8443
-        - localhost:3000
-        - .apikv.com
       allowMethods:
         - OPTIONS
         - GET

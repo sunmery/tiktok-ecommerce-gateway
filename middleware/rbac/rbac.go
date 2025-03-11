@@ -11,6 +11,8 @@ import (
 	"github.com/go-kratos/gateway/constants"
 	"github.com/go-kratos/gateway/middleware"
 	"github.com/go-kratos/gateway/pkg/loader"
+	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/watch"
 	"log"
 	"net/http"
 	"os"
@@ -28,13 +30,14 @@ var (
 	policyLoader         *loader.ConsulFileLoader
 	NotAuthZ             = errors.New("权限不足")
 	syncedCachedEnforcer *casbin.SyncedCachedEnforcer
+	enforcerMutex        sync.RWMutex // 新增互斥锁
 	cache                = NewCache(5*time.Minute, 10*time.Minute)
 	casdoorUrl           = os.Getenv(constants.CasdoorUrl)
 	userOwner            = constants.UserOwner
 	userIdMetadataKey    = constants.UserIdMetadataKey
 	initialized          bool
 	localPolicyFile      = os.Getenv(constants.PoliciesfilePath) // 策略文件路径
-	localModelFile       = os.Getenv(constants.ModelFilePath)  // 模型文件路径
+	localModelFile       = os.Getenv(constants.ModelFilePath)    // 模型文件路径
 )
 
 // InitEnforcer 初始化RBAC系统
@@ -71,11 +74,6 @@ func InitEnforcer() {
 	middleware.Register("rbac", Middleware)
 	initialized = true
 
-	// 创建策略目录
-	if err := os.MkdirAll("./policies", 0755); err != nil {
-		panic(fmt.Sprintf("创建策略目录失败: %v", err))
-	}
-
 	initPolicyLoader()
 
 	// 首次同步策略文件
@@ -94,11 +92,17 @@ func InitEnforcer() {
 
 // initPolicyLoader 初始化Consul文件加载器
 func initPolicyLoader() {
-	consulAddr := strings.TrimPrefix(os.Getenv(constants.DiscoveryDsn), "consul://")
-	var err error
-	policyLoader, err = loader.NewConsulFileLoader(consulAddr, consulPrefix)
+	consulConfig := api.DefaultConfig()
+	consulConfig.Address = strings.TrimPrefix(os.Getenv(constants.DiscoveryDsn), "consul://")
+
+	client, err := api.NewClient(consulConfig)
 	if err != nil {
-		panic(fmt.Sprintf("创建Consul文件加载器失败: %v", err))
+		panic(fmt.Sprintf("创建Consul客户端失败: %v", err))
+	}
+
+	policyLoader = &loader.ConsulFileLoader{
+		Client: client,
+		Prefix: consulPrefix,
 	}
 }
 
@@ -111,7 +115,7 @@ func syncPolicyFiles() error {
 	}
 
 	// 模型
-	remoteModelPath := filepath.Join( constants.RBACDirName, constants.ModelFileFileName)
+	remoteModelPath := filepath.Join(constants.RBACDirName, constants.ModelFileFileName)
 	if err := policyLoader.DownloadFile(remoteModelPath, localModelFile); err != nil {
 		return fmt.Errorf("下载模型文件失败: %w (远程路径: %s)", err, remoteModelPath)
 	}
@@ -120,6 +124,20 @@ func syncPolicyFiles() error {
 
 // createEnforcer 创建Casbin执行器
 func createEnforcer() error {
+	version := fmt.Sprintf("%d", time.Now().UnixNano())
+	if err := os.WriteFile(filepath.Join(filepath.Dir(localModelFile), "version"), []byte(version), 0644); err != nil {
+		log.Printf("版本标记写入失败: %v", err)
+	}
+	log.Printf("新建Enforcer版本: %s", version)
+
+	enforcerMutex.Lock()
+	defer enforcerMutex.Unlock()
+
+	// 停止旧的自动加载
+	if syncedCachedEnforcer != nil {
+		syncedCachedEnforcer.StopAutoLoadPolicy()
+	}
+
 	// 加载RBAC模型
 	modelContent, err := os.ReadFile(localModelFile)
 	if err != nil {
@@ -147,20 +165,109 @@ func createEnforcer() error {
 
 	// 设置自动加载策略间隔
 	syncedCachedEnforcer.StartAutoLoadPolicy(1 * time.Minute)
+
 	return nil
 }
 
-// watchPolicyChanges 策略文件变化监听
+// watchPolicyChanges 策略文件变化监听, 使用Consul Watch机制
 func watchPolicyChanges() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	// 创建单独的goroutine监控策略文件和模型文件
+	go watchConsulKey("rbac/policies.csv", onPolicyUpdate)
+	go watchConsulKey("rbac/model.conf", onModelUpdate)
+}
 
-	for range ticker.C {
-		if checkPolicyUpdate() {
-			log.Println("检测到策略变更，重新加载策略")
-			if err := syncedCachedEnforcer.LoadPolicy(); err != nil {
-				log.Printf("策略重载失败: %v", err)
+// 策略文件更新处理
+func onPolicyUpdate() {
+	log.Println("检测到策略文件变更")
+	enforcerMutex.RLock()
+	defer enforcerMutex.RUnlock()
+
+	if err := syncedCachedEnforcer.LoadPolicy(); err != nil {
+		log.Printf("策略重载失败: %v", err)
+		return
+	}
+	log.Println("策略更新成功")
+}
+
+// 模型文件更新处理
+func onModelUpdate() {
+	log.Println("检测到模型文件变更")
+	if err := reloadModelAndPolicy(); err != nil {
+		log.Printf("模型重载失败: %v", err)
+		return
+	}
+	log.Println("模型更新成功")
+}
+
+// 带原子性的模型和策略重载
+func reloadModelAndPolicy() error {
+	enforcerMutex.Lock()
+	defer enforcerMutex.Unlock()
+
+	// 重新下载模型文件
+	if err := policyLoader.DownloadFile(
+		filepath.Join(constants.RBACDirName, constants.ModelFileFileName),
+		localModelFile,
+	); err != nil {
+		return fmt.Errorf("模型文件下载失败: %w", err)
+	}
+
+	// 重新下载策略文件
+	if err := policyLoader.DownloadFile(
+		filepath.Join(constants.RBACDirName, constants.PoliciesfileName),
+		localPolicyFile,
+	); err != nil {
+		return fmt.Errorf("策略文件下载失败: %w", err)
+	}
+
+	// 重新创建Enforcer
+	if err := createEnforcer(); err != nil {
+		return fmt.Errorf("enforcer重建失败: %w", err)
+	}
+	return nil
+}
+
+// 通用Consul key监控函数
+func watchConsulKey(keyPath string, callback func()) {
+	// 构造watch参数
+	params := make(map[string]interface{})
+	params["type"] = "key"
+	params["key"] = filepath.Join(consulPrefix, keyPath)
+
+	// 初始化watch
+	watcher, err := watch.Parse(params)
+	if err != nil {
+		log.Printf("创建Consul监视器失败: %v (路径: %s)", err, params["key"])
+		return
+	}
+
+	// 错误处理重试机制
+	retries := 0
+	maxRetries := 3
+
+	for {
+		// 启动监视
+		watcher.Handler = func(idx uint64, data interface{}) {
+			if data == nil {
+				return // 忽略空数据
 			}
+
+			// 触发回调并重置重试计数
+			callback()
+			retries = 0
+		}
+
+		// 带超时和重试的运行
+		if err := watcher.RunWithClientAndHclog(policyLoader.Client(), nil); err != nil {
+			log.Printf("Consul监视失败: %v (路径: %s)", err, params["key"])
+
+			if retries >= maxRetries {
+				log.Printf("达到最大重试次数(%d)，停止监控: %s", maxRetries, keyPath)
+				return
+			}
+
+			retries++
+			time.Sleep(time.Duration(retries) * time.Second * 2) // 指数退避
 		}
 	}
 }
@@ -277,6 +384,9 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 				return nil, fmt.Errorf("%w: 无法验证权限", err)
 			}
 
+			fmt.Println("role, req.URL.Path, req.Method", role, req.URL.Path, req.Method)
+			enforcerMutex.RLock()
+			defer enforcerMutex.RUnlock()
 			allowed, err := syncedCachedEnforcer.Enforce(role, req.URL.Path, req.Method)
 			if err != nil {
 				return nil, fmt.Errorf("权限检查错误: %w", err)
@@ -313,7 +423,7 @@ func fetchRolesFromCasdoor(userID string) (string, error) {
 	id := fmt.Sprintf("%s/%s", userOwner, userID)
 	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/get-user?id=%s&owner=%s", casdoorUrl, id, userOwner), nil)
 	q := req.URL.Query()
-	q.Add("owner", userOwner)
+	// q.Add("owner", userOwner)
 	req.URL.RawQuery = q.Encode()
 
 	client := &http.Client{Timeout: 3 * time.Second}
