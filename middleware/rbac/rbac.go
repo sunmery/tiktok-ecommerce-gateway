@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/consul/api/watch"
 	"io"
 	"log"
+
 	"net/http"
 	"os"
 	"path"
@@ -22,10 +23,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
-
-const (
-	consulPrefix = "ecommerce/gateway"
 )
 
 var (
@@ -104,7 +101,7 @@ func initPolicyLoader() {
 
 	policyLoader = &loader.ConsulFileLoader{
 		Client: client,
-		Prefix: consulPrefix,
+		Prefix: constants.DiscoveryPrefix,
 	}
 }
 
@@ -172,12 +169,12 @@ func createEnforcer() error {
 }
 
 func watchPolicyChanges() {
-	startConsulWatch("rbac/policies.csv", onPolicyUpdate)
-	startConsulWatch("rbac/model.conf", onModelUpdate)
+	startConsulWatch(fmt.Sprintf("%s/%s", constants.RBACDirName, constants.PoliciesfileName), onPolicyUpdate)
+	startConsulWatch(fmt.Sprintf("%s/%s", constants.RBACDirName, constants.ModelFileFileName), onModelUpdate)
 }
 
 func startConsulWatch(keyPath string, callback func()) {
-	fullPath := path.Join(consulPrefix, keyPath)
+	fullPath := path.Join(constants.DiscoveryPrefix, keyPath)
 	log.Printf("[WATCH] 启动监听: %s", fullPath)
 
 	params := map[string]interface{}{
@@ -249,8 +246,6 @@ func reloadModelAndPolicy() error {
 	return createEnforcer()
 }
 
-// 以下缓存相关代码保持不变...
-
 type Cache struct {
 	items    map[string]cacheItem
 	mu       sync.RWMutex
@@ -297,8 +292,6 @@ func (c *Cache) Set(key string, value interface{}) {
 	}
 }
 
-// 中间件和角色获取逻辑保持不变...
-
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 	var routerFilter *config.Middleware_RouterFilter
 	if c != nil && c.RouterFilter != nil {
@@ -342,9 +335,9 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 			}
 
 			if allowed {
-				req.Header.Set("x-md-global-role", role)
-				req.Header.Set("x-md-global-owner", userOwner)
-				req.Header.Set("x-md-global-user-id", userID)
+				req.Header.Set(constants.UserRoleMetadataKey, role)
+				req.Header.Set(constants.UserOwner, userOwner)
+				req.Header.Set(constants.UserIdMetadataKey, userID)
 				return next.RoundTrip(req)
 			}
 
@@ -406,8 +399,6 @@ func fetchRolesFromCasdoor(userID string) (string, error) {
 	}
 	return role, nil
 }
-
-// 清理器保持原样...
 
 type cacheJanitor struct {
 	Interval time.Duration

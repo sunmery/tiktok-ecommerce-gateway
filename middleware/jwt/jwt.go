@@ -9,10 +9,12 @@ import (
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
 	"github.com/go-kratos/gateway/constants"
 	"github.com/go-kratos/gateway/middleware"
-	"github.com/go-kratos/gateway/pkg/loader" // 新增 loader 包
+	"github.com/go-kratos/gateway/pkg/loader"
 	"github.com/go-kratos/gateway/proxy/auth"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/watch"
 	"net/http"
 	"os"
 	"path"
@@ -23,59 +25,66 @@ import (
 )
 
 const (
-	consulPrefix = "ecommerce/gateway" // 与 RBAC 保持一致的 Consul 前缀
+	consulPrefix = "ecommerce/gateway"
 )
 
 var (
-	NotAuthN          = errors.New("unauthorized: authentication required")
-	publicKey         *rsa.PublicKey
-	publicKeyLoader   *loader.ConsulFileLoader // 新增 Consul 加载器
-	publicKeyPath     string
-	keyReloadInterval = 30 * time.Second // 公钥重载间隔
-	initialized       bool
-	mu                sync.RWMutex // 公钥更新锁
+	NotAuthN        = errors.New("unauthorized: authentication required")
+	publicKey       *rsa.PublicKey
+	publicKeyLoader *loader.ConsulFileLoader
+	publicKeyPath   string
+	initialized     bool
+	mu              sync.RWMutex
 )
 
-func Init() {
+func Init() error {
 	if initialized {
-		return
+		return nil
 	}
 
-	// 初始化 Consul 加载器
-	initConsulLoader()
+	if err := initConsulLoader(); err != nil {
+		return fmt.Errorf("consul 初始化失败: %w", err)
+	}
 
-	// 设置默认路径
 	publicKeyPath = getPublicKeyPath()
-	if err := ensureSecretsDir(); err != nil {
-		panic(fmt.Sprintf("创建密钥目录失败: %v", err))
+	if err := initLocalFiles(); err != nil {
+		return fmt.Errorf("文件初始化失败: %w", err)
 	}
 
-	// 首次同步公钥
-	if err := syncPublicKey(); err != nil {
-		panic(fmt.Sprintf("初始化公钥失败: %v", err))
+	if err := loadAndVerifyPublicKey(); err != nil {
+		return fmt.Errorf("公钥初始化失败: %w", err)
 	}
 
 	middleware.Register("jwt", Middleware)
 	initialized = true
 
-	// 启动定时检查
-	go watchPublicKeyChanges()
+	go startKeyWatcher()
+	log.Info("[JWT] 初始化完成，开始监听公钥变更")
+	return nil
 }
 
-func initConsulLoader() {
-	consulAddr := strings.TrimPrefix(os.Getenv(constants.DiscoveryDsn), "consul://")
-	var err error
-	publicKeyLoader, err = loader.NewConsulFileLoader(consulAddr, consulPrefix)
+func initConsulLoader() error {
+	addr := strings.TrimPrefix(os.Getenv(constants.DiscoveryDsn), "consul://")
+	newLoader, err := loader.NewConsulFileLoader(addr, consulPrefix)
 	if err != nil {
-		panic(fmt.Sprintf("创建Consul文件加载器失败: %v", err))
+		return fmt.Errorf("创建Consul加载器失败: %w", err)
 	}
+	publicKeyLoader = newLoader
+	return nil
+}
+
+func initLocalFiles() error {
+	secretsDir := filepath.Dir(publicKeyPath)
+	if err := os.MkdirAll(secretsDir, 0755); err != nil {
+		return fmt.Errorf("创建密钥目录失败: %w", err)
+	}
+	return syncPublicKey()
 }
 
 func getPublicKeyPath() string {
-	if path := os.Getenv(constants.JwtPubkeyPath); path != "" {
-		return path
+	if pubPath := os.Getenv(constants.JwtPubkeyPath); pubPath != "" {
+		return pubPath
 	}
-	// 动态配置目录 + secrets/public.pem
 	return filepath.Join(
 		constants.ConfigDir,
 		constants.SecretsDirName,
@@ -83,79 +92,151 @@ func getPublicKeyPath() string {
 	)
 }
 
-func ensureSecretsDir() error {
-	fullPath := filepath.Dir(publicKeyPath)
-	log.Infof("创建密钥目录: %s", fullPath)
-	return os.MkdirAll(fullPath, 0755)
+func startKeyWatcher() {
+	watchPath := path.Join(constants.SecretsDirName, constants.JwtPublicFileName)
+	startConsulWatch(watchPath, onPublicKeyUpdate)
+}
+
+func startConsulWatch(keyPath string, callback func()) {
+	fullPath := path.Join(consulPrefix, keyPath)
+	log.Infof("[JWT] 启动公钥监听: %s", fullPath)
+
+	params := map[string]interface{}{
+		"type": "key",
+		"key":  fullPath,
+	}
+
+	watcher, err := watch.Parse(params)
+	if err != nil {
+		log.Errorf("[JWT] 创建监视器失败: %v", err)
+		return
+	}
+
+	watcher.Handler = func(idx uint64, data interface{}) {
+		if _, ok := data.(*api.KVPair); ok {
+			log.Infof("[JWT] 检测到公钥变更: %s", fullPath)
+			callback()
+		}
+	}
+
+	for {
+		if err := watcher.RunWithClientAndHclog(publicKeyLoader.Client, nil); err != nil {
+			log.Errorf("[JWT] 监听错误: %v (5秒后重试)", err)
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func onPublicKeyUpdate() {
+	log.Info("[JWT] 开始处理公钥更新...")
+	defer log.Info("[JWT] 公钥更新处理完成")
+
+	if err := syncPublicKey(); err != nil {
+		log.Errorf("[JWT] 公钥同步失败: %v", err)
+		return
+	}
+
+	if err := reloadPublicKey(); err != nil {
+		log.Errorf("[JWT] 公钥重载失败: %v", err)
+	}
 }
 
 func syncPublicKey() error {
-	// 从 Consul 下载到本地路径
-	remoteKeyPath := filepath.Join(constants.SecretsDirName, constants.JwtPublicFileName)
-	if err := publicKeyLoader.DownloadFile(remoteKeyPath, publicKeyPath); err != nil {
-		return fmt.Errorf("下载公钥失败: %w (远程路径: %s)", err, remoteKeyPath)
+	tempFile := publicKeyPath + ".tmp"
+	defer os.Remove(tempFile)
+
+	remotePath := path.Join(constants.SecretsDirName, constants.JwtPublicFileName)
+	if err := publicKeyLoader.DownloadFile(remotePath, tempFile); err != nil {
+		return fmt.Errorf("下载失败: %w", err)
 	}
 
-	// 重载公钥
-	return reloadPublicKey()
+	if err := validatePublicKey(tempFile); err != nil {
+		return fmt.Errorf("公钥校验失败: %w", err)
+	}
+
+	if err := atomicReplaceFile(tempFile, publicKeyPath); err != nil {
+		return fmt.Errorf("文件替换失败: %w", err)
+	}
+	return nil
 }
-
 func reloadPublicKey() error {
-	certData, err := os.ReadFile(publicKeyPath)
+	mu.Lock()
+	defer mu.Unlock()
+
+	data, err := os.ReadFile(publicKeyPath)
 	if err != nil {
-		return fmt.Errorf("读取证书文件失败: %v (路径: %s)", err, publicKeyPath)
+		return fmt.Errorf("读取文件失败: %w", err)
 	}
 
-	block, _ := pem.Decode(certData)
+	block, _ := pem.Decode(data)
 	if block == nil {
 		return errors.New("PEM 解码失败")
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return fmt.Errorf("解析证书失败: %v", err)
+		return fmt.Errorf("证书解析失败: %w", err)
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-	var ok bool
-	if publicKey, ok = cert.PublicKey.(*rsa.PublicKey); !ok {
-		return errors.New("非 RSA 公钥")
+	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return errors.New("非 RSA 公钥类型")
+	}
+	publicKey = pubKey
+	return nil
+}
+func validatePublicKey(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return errors.New("无效PEM格式")
+	}
+
+	if _, err := x509.ParseCertificate(block.Bytes); err != nil {
+		return fmt.Errorf("证书解析失败: %w", err)
 	}
 	return nil
 }
 
-func watchPublicKeyChanges() {
-	ticker := time.NewTicker(keyReloadInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		tempFile := publicKeyPath + ".tmp"
-		defer os.Remove(tempFile)
-
-		// 下载最新公钥到临时文件
-		remoteKeyPath := path.Join(constants.SecretsDirName, constants.JwtPublicFileName)
-		log.Infof("远程公钥路径: %s", remoteKeyPath) // 添加调试日志
-		if err := publicKeyLoader.DownloadFile(remoteKeyPath, tempFile); err != nil {
-			log.Errorf("公钥更新检查失败: %v (远程路径: %s)", err, remoteKeyPath)
-			continue
-		}
-
-		// 对比内容
-		current, _ := os.ReadFile(publicKeyPath)
-		newContent, _ := os.ReadFile(tempFile)
-		if string(current) != string(newContent) {
-			log.Info("检测到公钥变更，重新加载")
-			if err := os.WriteFile(publicKeyPath, newContent, 0644); err != nil {
-				log.Errorf("写入新公钥失败: %v", err)
-				continue
-			}
-			if err := reloadPublicKey(); err != nil {
-				log.Errorf("重载公钥失败: %v", err)
-			}
-			log.Info("公钥重载成功")
-		}
+func atomicReplaceFile(src, dst string) error {
+	if err := os.Rename(src, dst); err != nil {
+		return fmt.Errorf("文件替换失败: %w", err)
 	}
+	log.Infof("[JWT] 成功更新文件: %s", dst)
+	return nil
+}
+
+func loadAndVerifyPublicKey() error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	data, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return fmt.Errorf("读取文件失败: %w", err)
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return errors.New("PEM解码失败")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("证书解析失败: %w", err)
+	}
+
+	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return errors.New("非RSA公钥类型")
+	}
+
+	publicKey = pubKey
+	log.Info("[JWT] 公钥加载成功")
+	return nil
 }
 
 type CustomClaims struct {
@@ -184,48 +265,39 @@ func ParseJwt(tokenString string) (*CustomClaims, error) {
 }
 
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
-	var routerFilter *config.Middleware_RouterFilter
-	if c != nil && c.RouterFilter != nil {
-		routerFilter = c.RouterFilter
-	} else {
-		routerFilter = &config.Middleware_RouterFilter{} // 空配置
-	}
-
+	// 解析跳过规则
 	skipRules := make(map[string]map[string]bool)
-	for _, rule := range routerFilter.Rules { // 安全访问
-		methods := make(map[string]bool)
-		for _, m := range rule.Methods {
-			methods[strings.ToUpper(m)] = true
+	if c.GetRouterFilter() != nil {
+		for _, rule := range c.GetRouterFilter().Rules {
+			methods := make(map[string]bool)
+			for _, m := range rule.Methods {
+				methods[strings.ToUpper(m)] = true
+			}
+			skipRules[rule.Path] = methods
 		}
-		skipRules[rule.Path] = methods
 	}
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			log.Infof("Processing request: %s %s", req.Method, req.URL.Path)
-
-			// 动态路由跳过检查
-			if methods, ok := skipRules[req.URL.Path]; ok {
-				if methods[req.Method] {
-					return next.RoundTrip(req)
-				}
+			// 检查白名单
+			if methods, ok := skipRules[req.URL.Path]; ok && methods[req.Method] {
+				return next.RoundTrip(req)
 			}
 
+			// 提取令牌
 			authHeader := req.Header.Get("Authorization")
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				return nil, fmt.Errorf("%w: 缺失 Bearer 令牌", NotAuthN)
+				return nil, fmt.Errorf("%w: Bearer token required", NotAuthN)
 			}
 
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			claims, err := ParseJwt(token)
+			// 解析 JWT
+			claims, err := ParseJwt(strings.TrimPrefix(authHeader, "Bearer "))
 			if err != nil {
-				log.Errorf("JWT 解析错误: %v", err)
 				return nil, fmt.Errorf("%w: %v", NotAuthN, err)
 			}
 
-			// 传递到下游服务
-			req.Header.Set("x-md-global-user-id", claims.ID)
-			req.Header.Set("x-md-global-user-owner", claims.Owner)
-
+			// 传递用户信息
+			req.Header.Set(constants.UserIdMetadataKey, claims.ID)
+			req.Header.Set(constants.UserOwner, claims.Owner)
 			return next.RoundTrip(req)
 		})
 	}, nil

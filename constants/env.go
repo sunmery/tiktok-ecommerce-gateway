@@ -26,8 +26,6 @@ const (
 
 	CasdoorUrl = "CASDOOR_URL"
 
-	UserOwnerMetadataKey = "x-md-global-owner"
-	UserIdMetadataKey    = "x-md-global-user-id"
 
 	Debug = "Debug"
 
@@ -59,6 +57,9 @@ const (
 
 	// UserOwner 用户组织
 	UserOwner = "tiktok"
+	UserRoleMetadataKey ="x-md-global-role"
+	UserOwnerMetadataKey = "x-md-global-owner"
+	UserIdMetadataKey    = "x-md-global-user-id"
 
 	// RBACDirName 基于角色的访问控制
 	RBACDirName       = "rbac"
