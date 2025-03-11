@@ -1,11 +1,17 @@
 package jwt
 
-import "testing"
+import (
+	"os"
+	"testing"
 
-func TestSync(t *testing.T) {
-	if err := syncPublicKey(); err != nil {
-		t.Error("手动同步失败: ", err)
-	} else {
-		t.Log("手动同步成功")
+	"github.com/go-kratos/kratos/v2/log"
+)
+
+func TestInit(t *testing.T) {
+	log.SetLogger(log.NewStdLogger(os.Stdout))
+
+	err := Init()
+	if err != nil {
+		t.Fatalf("初始化失败: %v", err)
 	}
 }
