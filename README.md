@@ -6,11 +6,12 @@ HTTP -> Proxy -> Router -> Middleware -> Client -> Selector -> Node
 
 ## Run
 ```bash
-CASDOOR_URL=http://casdoor:8000 \
-REDIS_ADDR=localhost:6379 \
-DISCOVERY_DSN=consul://localhost:8500 \
-CONFIG_PATH="consul://localhost:8500/kratos/gateway/config.yaml" \
-JWT_PUBKEY_PATH="./public.pem" kr run
+CASDOOR_URL=http://CASDOOR_URL:8000 \
+DISCOVERY_DSN=consul://DISCOVERY_DSN:3026 \
+DISCOVERY_CONFIG_PATH=ecommerce/gateway/config.yaml \
+POLICIES_FILE_PATH=/app/dynamic-config/policies/policies.csv \
+MODEL_FILE_PATH=/app/dynamic-config/policies/model.conf \
+kr run
 ```
 
 ## gRPC

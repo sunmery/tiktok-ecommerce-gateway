@@ -1,29 +1,24 @@
 services:
 
   gateway:
-    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.4.0
-    build:
-      context: .
-      target: final
-      # 构建参数
-      args:
-        CGOENABLED: 0
-        GOIMAGE: golang:1.24.0-alpine3.21
-        VERSION: v1.4.0
-        GATEWAY_PORT: 8080
+    image: ccr.ccs.tencentyun.com/kratos/gateway:v1.7.0
     ports:
       - "8080:8080"
     container_name: ecommerce-gateway
+    platform: linux/amd64
+    pull_policy: always
     restart: on-failure:3
     environment:
-      - discoveryDsn=consul://consul:8500
-      - configPath=ecommerce/gateway/config.yaml
-      - jwtPubkeyPath=/app/dynamic-config/public.pem
-      - certFile=/app/dynamic-config/tls/gateway.crt
-      - keyFile=/app/dynamic-config/tls/gateway.key
-    volumes:
-      # 仅挂载本地配置文件（开发环境）
-      - ./dynamic-config:/app/dynamic-config
-    command: ["/app/gateway"]
+      - CASDOOR_URL=http://CASDOOR_URL:8000
+      - DISCOVERY_DSN=consul://DISCOVERY_DSN:3026
+      - DISCOVERY_CONFIG_PATH=ecommerce/gateway/config.yaml
+      - POLICIES_FILE_PATH=/app/dynamic-config/policies/policies.csv
+      - MODEL_FILE_PATH=/app/dynamic-config/policies/model.conf
+    command:
+      - "/app/gateway"
+      - "-conf"
+      - "/app/configs/config.yaml"
+    networks:
+      - ecommerce
 
 # docker compose build
