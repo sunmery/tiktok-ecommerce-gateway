@@ -100,8 +100,17 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 				}
 				return newResponse(200, resp.Header, data)
 			}
+
+			// 检查数据长度，确保不会发生索引越界
+			if len(data) < 5 {
+				// 如果数据长度不足，返回空JSON对象作为响应
+				resp.Header.Set("Content-Type", "application/json")
+				return newResponse(200, resp.Header, []byte("{}"))
+			}
+
 			resp.Body = io.NopCloser(bytes.NewReader(data[5:]))
 			resp.ContentLength = int64(len(data) - 5)
+
 			// Any content length that might be set is no longer accurate because of trailers.
 			resp.Header.Del("Content-Length")
 			return resp, nil

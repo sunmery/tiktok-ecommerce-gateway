@@ -4,17 +4,46 @@
 
 HTTP -> Proxy -> Router -> Middleware -> Client -> Selector -> Node
 
-## Run
+# Run
+## 配置
+`cmd/gateway/config.yaml`:
+```yaml
+envs:
+  # 服务发现
+  DISCOVERY_DSN: "consul://DISCOVERY_DSN:8500"
+  # 服务发现配置路径
+  DISCOVERY_CONFIG_PATH: "ecommerce/gateway/config.yaml"
+  # 输出的日志等级
+  LOG_LEVEL: "debug"
+  # Casdoor 地址
+  CASDOOR_URL: http://CASDOOR_URL:8000
+
+  # 是否使用 TLS, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
+  USE_TLS: "false"
+  # TLS 证书路径
+  CRT_FILE_PATH: "dynamic-config/tls/gateway.crt"
+  # TLS Key路径
+  KEY_FILE_PATH: "dynamic-config/tls/gateway.key"
+  
+  # JWT 公钥证书
+  JWT_PUBKEY_PATH: "/app/dynamic-config/policies/model.conf"
+  
+  # RBAC模型文件路径
+  MODEL_FILE_PATH: "/app/dynamic-config/policies/model.conf"
+  # RBAC策略文件路径
+  POLICIES_FILE_PATH: "/app/dynamic-config/policies/policies.csv"
+```
+
 ```bash
 CASDOOR_URL=http://CASDOOR_URL:8000 \
-DISCOVERY_DSN=consul://DISCOVERY_DSN:3026 \
+DISCOVERY_DSN=consul://DISCOVERY_DSN:8500 \
 DISCOVERY_CONFIG_PATH=ecommerce/gateway/config.yaml \
 POLICIES_FILE_PATH=/app/dynamic-config/policies/policies.csv \
 MODEL_FILE_PATH=/app/dynamic-config/policies/model.conf \
 kr run
 ```
 
-## gRPC
+# gRPC
 gRPC本质上是基于HTTP/2的协议, 它在调用时只使用POST方法, 所以gRPC的method只有POST方法, 所以gRPC的配置和HTTP的配置是一样的, 
 但HTTP路径是你自己定义的, gRPC路径是protoc这些生成器自动根据由服务名和方法名组成的
 
@@ -51,7 +80,7 @@ endpoints:
 
 ```
 
-## 编写自定义中间件
+# 编写自定义中间件
 1. 创建一个目录: ./middleware/routerfilter
 2. 创建一个文件: ./middleware/routerfilter/routerfilter.go
 3. 如果需要配置: : /api/gateway/middleware/routerfilter/routerfilter.proto
@@ -192,7 +221,7 @@ func (s *ProxyServer) Start(ctx context.Context) error {
 
 ```
 
-## Middleware
+# Middleware
 * cors
 * auth
 * color
@@ -295,11 +324,11 @@ middlewares:
           methods: [GET, DELETE]
 ```
 
-### JWT
+## JWT
 证书使用`x509`生成,4096位大小,加密算法是RS256(RSA+SHA256),有效期20年. 
 证书文件在`/cmd/gatway`目录下, 证书文件名为`public.pem`
 
-### RBAC
+## RBAC
 
 目前使用了官方的casbin的redis插件来缓存策略, 不一定是Redis, 也可以是任何支持redis协议的`rpush`工具即可 
 目前的redis实例是没有设置密码的, 如果需要设置密码, 可以修改`middleware/rbac/rbac.go`中的代码的`initEnforcer` 函数,
@@ -351,57 +380,38 @@ g2 = _, _
 e = some(where (p.eft == allow)) && !some(where (p.eft == deny))
 
 [matchers]
-m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act) && !keyMatch2(r.obj, "/v1/auth")
-
+m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act)
 ```
 
 策略:
-```json
-[
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"public\",\"V1\":\"/v1/auth\",\"V2\":\"POST\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"user\",\"V1\":\"/v1/auth/profile\",\"V2\":\"GET\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"user\",\"V1\":\"/v1/users/*\",\"V2\":\"(GET|POST|PATCH|DELETE)\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"user\",\"V1\":\"/v1/cart*\",\"V2\":\"(GET|POST|DELETE)\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"user\",\"V1\":\"/v1/checkout\",\"V2\":\"POST\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"user\",\"V1\":\"/v1/order\",\"V2\":\"(GET|POST)\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"merchant\",\"V1\":\"/v1/products*\",\"V2\":\"(POST|PUT|DELETE)\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"merchant\",\"V1\":\"/v1/products/*/submit-audit\",\"V2\":\"POST\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"admin\",\"V1\":\"/v1/categories*\",\"V2\":\"(POST|PUT|DELETE|PATCH)\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"admin\",\"V1\":\"/v1/products/*/audit\",\"V2\":\"POST\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"admin\",\"V1\":\"/v1/order/*/paid\",\"V2\":\"POST\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"anyone\",\"V1\":\"/*\",\"V2\":\".*\",\"V3\":\"deny\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"g\",\"V0\":\"merchant\",\"V1\":\"user\",\"V2\":\"\",\"V3\":\"\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"g\",\"V0\":\"admin\",\"V1\":\"merchant\",\"V2\":\"\",\"V3\":\"\",\"V4\":\"\",\"V5\":\"\"}"
-  },
-  {
-    "value": "{\"PType\":\"p\",\"V0\":\"user\",\"V1\":\"/v1/products\",\"V2\":\"GET\",\"V3\":\"allow\",\"V4\":\"\",\"V5\":\"\"}"
-  }
-]
+```csv
+p, public, /v1/auth, POST, allow
+p, public, /v1/products, GET, allow
+p, public, /ecommerce.product.v1.ProductService/*, POST, allow
+
+p, user, /v1/auth/profile, GET, allow
+p, user, /v1/users/*, (GET|POST|PATCH|DELETE), allow
+p, user, /v1/carts, (GET|POST|PATCH|DELETE), allow
+p, user, /v1/carts/*, (GET|POST|DELETE), allow
+p, user, /v1/checkout/*, POST, allow
+p, user, /v1/orders, (GET|POST), allow
+p, user, /v1/categories/*, GET, allow
+
+p, merchant, /v1/products*, (GET|POST|PUT|DELETE), allow
+p, merchant, /v1/products/*/submit-audit, POST, allow
+p, merchant, /v1/categories/*, POST, allow
+p, merchant, /v1/merchants, (GET|POST|PUT|DELETE|PATCH), allow
+
+p, admin, /v1/users/*, (POST|PUT|DELETE|PATCH), allow
+p, admin, /v1/categories/*, (POST|PUT|DELETE|PATCH), allow
+p, admin, /v1/products/*, (GET|POST|PUT|DELETE|PATCH), allow
+p, admin, /v1/products/*/audit, POST, allow
+p, admin, /v1/merchants/*, (GET|POST|PUT|DELETE|PATCH), allow
+p, admin, /v1/orders/*/paid, POST, allow
+p, admin, /ecommerce.product.v1.ProductService/*, (POST|PUT|DELETE|PATCH), allow
+p, anyone, /*, .*, deny
+
+g, user, public
+g, merchant, user
+g, admin, merchant
 ```

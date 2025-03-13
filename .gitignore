@@ -36,3 +36,6 @@ bin/
 .vscode/
 .idea/
 *.swp
+
+# Temporary files in secrets directory
+cmd/gateway/dynamic-config/secrets/tmp-*

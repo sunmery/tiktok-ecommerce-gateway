@@ -16,16 +16,16 @@ const (
 	// JwtPubkeyPath JWT公钥路径
 	JwtPubkeyPath = "JWT_PUBKEY_PATH"
 
-	// TlsDir TLS 配置
+	// UseTLS TLS 配置
+	UseTLS  = "USE_TLS" // 是否使用TLS
 	TlsDir  = "TLS_DIR"
 	CrtFile = "CRT_FILE_PATH"
 	KeyFile = "KEY_FILE_PATH"
 
 	PoliciesfilePath = "POLICIES_FILE_PATH"
-	ModelFilePath= "MODEL_FILE_PATH"
+	ModelFilePath    = "MODEL_FILE_PATH"
 
 	CasdoorUrl = "CASDOOR_URL"
-
 
 	Debug = "Debug"
 
@@ -56,8 +56,8 @@ const (
 	JwtPublicFileName = "public.pem"
 
 	// UserOwner 用户组织
-	UserOwner = "tiktok"
-	UserRoleMetadataKey ="x-md-global-role"
+	UserOwner            = "tiktok"
+	UserRoleMetadataKey  = "x-md-global-role"
 	UserOwnerMetadataKey = "x-md-global-owner"
 	UserIdMetadataKey    = "x-md-global-user-id"
 
@@ -66,7 +66,6 @@ const (
 	PoliciesfileName  = "policies.csv"
 	ModelFileFileName = "model.conf"
 
-	UseTLS = "false" // 是否使用TLS
 	TlsDirName  = "tls"
 	CrtFileName = "gateway.crt"
 	KeyFileName = "gateway.key"

@@ -123,7 +123,7 @@ func main() {
 	// 更新服务端点配置(包括中间件) 会重置路由表 根据端点配置，创建路由处理器
 	// 路由处理器中 包含一个客户端以及中间件调用链
 	if err := p.Update(bc); err != nil {
-		log.Fatalf("failed to update service config: %v", err)
+		log.Fatalf("failed to update service config bc: %v", err)
 	}
 	reloader := func() error {
 		bc, err := confLoader.Load(context.Background())

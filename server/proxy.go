@@ -4,11 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/go-kratos/gateway/constants"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/go-kratos/gateway/constants"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 
 	"github.com/go-kratos/kratos/v2/log"
 )
@@ -52,7 +55,8 @@ type ProxyServer struct {
 
 // NewProxy new a gateway server.
 func NewProxy(handler http.Handler, addr string) *ProxyServer {
-	useTLS := os.Getenv(constants.UseTLS) == "true"
+	// useTLS := os.Getenv(constants.UseTLS) == "true"
+	useTLS := false
 	var tlsConfig *tls.Config
 
 	if useTLS {
@@ -92,7 +96,7 @@ func NewProxy(handler http.Handler, addr string) *ProxyServer {
 		Server: &http.Server{
 			Addr:              addr,
 			TLSConfig:         tlsConfig,
-			Handler:           handler,
+			Handler:           h2c.NewHandler(handler, &http2.Server{}), // 显式启用 h2c 处理来支持非加密的 HTTP/2 通信
 			ReadTimeout:       readTimeout,
 			ReadHeaderTimeout: readHeaderTimeout,
 			WriteTimeout:      writeTimeout,

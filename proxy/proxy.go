@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-kratos/gateway/middleware/jwt"
-	"github.com/go-kratos/gateway/middleware/rbac"
 	"io"
 	"net"
 	"net/http"
@@ -17,6 +15,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/go-kratos/gateway/middleware/jwt"
+	"github.com/go-kratos/gateway/middleware/rbac"
 
 	"github.com/go-kratos/aegis/circuitbreaker/sre"
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
