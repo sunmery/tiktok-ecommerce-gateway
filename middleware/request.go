@@ -7,8 +7,6 @@ import (
 	"github.com/go-kratos/kratos/v2/selector"
 )
 
-type contextKey struct{}
-
 // RequestOptions is a request option.
 type RequestOptions struct {
 	Endpoint             *config.Endpoint

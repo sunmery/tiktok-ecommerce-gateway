@@ -8,29 +8,34 @@ envs:
   # 服务发现
   DISCOVERY_DSN: consul://99.suyiiyii.top:3026
   # 服务发现配置路径
-  DISCOVERY_CONFIG_PATH: "ecommerce/gateway/config.yaml"
+  DISCOVERY_CONFIG_PATH: ecommerce/gateway/config.yaml
   # 输出的日志等级
-  LOG_LEVEL: "debug"
+  LOG_LEVEL: debug
   # Casdoor 地址
   CASDOOR_URL: http://159.75.231.54:8000
 
+  # 布尔值需要加引号.
   # 是否使用 TLS, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
   USE_TLS: "false"
   # TLS 证书路径
-  CRT_FILE_PATH: "dynamic-config/tls/gateway.crt"
+  CRT_FILE_PATH: dynamic-config/tls/gateway.crt
   # TLS Key路径
-  KEY_FILE_PATH: "dynamic-config/tls/gateway.key"
+  KEY_FILE_PATH: dynamic-config/tls/gateway.key
 
   # JWT 公钥证书
-  JWT_PUBKEY_PATH: "/app/dynamic-config/policies/model.conf"
+  JWT_PUBKEY_PATH: dynamic-config/policies/model.conf
 
   # RBAC模型文件路径
-  MODEL_FILE_PATH: "/app/dynamic-config/policies/model.conf"
+  MODEL_FILE_PATH: dynamic-config/policies/model.conf
   # RBAC策略文件路径
-  POLICIES_FILE_PATH: "/app/dynamic-config/policies/policies.csv"
+  POLICIES_FILE_PATH: dynamic-config/policies/policies.csv
+
+  # 部署时配置:
+  #  JWT_PUBKEY_PATH: /app/dynamic-config/policies/model.conf
+  #  MODEL_FILE_PATH: /app/dynamic-config/policies/model.conf
+  #  POLICIES_FILE_PATH: /app/dynamic-config/policies/policies.csv
 
 middlewares:
-  - name: transcoder
   # 前端跨域选项
   - name: cors
     options:
@@ -118,7 +123,7 @@ middlewares:
           methods:
             - OPTIONS
             - POST
-
+  - name: transcoder
 endpoints:
   - path: /v1/products/*
     protocol: GRPC

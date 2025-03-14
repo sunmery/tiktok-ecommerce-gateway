@@ -84,18 +84,26 @@ func main() {
 	}
 
 	// 5. 初始化中间件
+
+	// JWT 中间件初始化
 	jwtErr := jwt.Init()
-	if err != nil {
-		log.Fatalf("JWT 中间件初始化失败: %v", jwtErr)
-	} // JWT 中间件初始化
-	rbac.InitEnforcer() // RBAC 中间件初始化
+	if jwtErr != nil {
+		log.Fatalf("JWT middleware init failed: %v", jwtErr)
+		return
+	}
+	// RBAC 中间件初始化
+	rbacErr := rbac.InitEnforcer()
+	if rbacErr != nil {
+		log.Fatalf("RBAC middleware init failed: %v", rbacErr)
+		return
+	}
 
 	// 根据传入的服务发现创建客户端工厂
 	clientFactory := client.NewFactory(makeDiscovery())
 	// 创建代理 New 函数会创建基本的路由 不会根据配置端点创建路由
-	p, err := proxy.New(clientFactory, middleware.Create)
-	if err != nil {
-		log.Fatalf("failed to new proxy: %v", err)
+	p, proxyErr := proxy.New(clientFactory, middleware.Create)
+	if proxyErr != nil {
+		log.Fatalf("failed to new proxy: %v", proxyErr)
 	}
 	circuitbreaker.Init(clientFactory)
 
