@@ -1,7 +1,6 @@
 package rewrite
 
 import (
-	"log"
 	"net/http"
 	"path"
 	"strings"
@@ -29,27 +28,6 @@ func stripPrefix(origin string, prefix string) string {
 	return out
 }
 
-func applyHeadersPolicy(header http.Header, policy *v1.HeadersPolicy) {
-	if policy == nil {
-		return
-	}
-
-	// 先处理删除
-	for _, key := range policy.Remove {
-		header.Del(key)
-	}
-
-	// 处理设置（覆盖已有值）
-	for key, value := range policy.Set {
-		header.Set(key, value)
-	}
-
-	// 处理添加（保留已有值）
-	for key, value := range policy.Add {
-		header.Add(key, value)
-	}
-}
-
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 	options := &v1.Rewrite{}
 	if c.Options != nil {
@@ -57,45 +35,47 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 			return nil, err
 		}
 	}
-
+	requestHeadersRewrite := options.RequestHeadersRewrite
+	responseHeadersRewrite := options.ResponseHeadersRewrite
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			originalPath := req.URL.Path
-			// originalHost := req.Host
-
-			// 1. 处理前缀剥离
+			if options.PathRewrite != nil {
+				req.URL.Path = *options.PathRewrite
+			}
+			if options.HostRewrite != nil {
+				req.Host = *options.HostRewrite
+			}
 			if options.StripPrefix != nil {
 				req.URL.Path = stripPrefix(req.URL.Path, options.GetStripPrefix())
 			}
+			if requestHeadersRewrite != nil {
+				for key, value := range requestHeadersRewrite.Set {
+					req.Header.Set(key, value)
+				}
+				for key, value := range requestHeadersRewrite.Add {
+					req.Header.Add(key, value)
+				}
+				for _, value := range requestHeadersRewrite.Remove {
+					req.Header.Del(value)
 
-			// 2. 路径重写（支持保留方法名）
-			if options.PathRewrite != nil {
-				// 获取原始路径的方法名部分
-				methodName := path.Base(originalPath)
-				// 拼接新路径和方法名
-				req.URL.Path = path.Join(*options.PathRewrite, methodName)
+				}
 			}
-
-			// 3. 主机重写
-			if options.HostRewrite != nil {
-				req.Host = *options.HostRewrite
-				req.URL.Host = *options.HostRewrite
-			}
-
-			// 4. 处理请求头
-			applyHeadersPolicy(req.Header, options.RequestHeadersRewrite)
-
-			log.Printf("Rewritten path: %s -> %s", originalPath, req.URL.Path)
-
-			// 5. 转发请求
 			resp, err := next.RoundTrip(req)
 			if err != nil {
 				return nil, err
 			}
+			if responseHeadersRewrite != nil {
+				for key, value := range responseHeadersRewrite.Set {
+					resp.Header.Set(key, value)
+				}
+				for key, value := range responseHeadersRewrite.Add {
+					resp.Header.Add(key, value)
+				}
+				for _, value := range responseHeadersRewrite.Remove {
+					resp.Header.Del(value)
 
-			// 6. 处理响应头
-			applyHeadersPolicy(resp.Header, options.ResponseHeadersRewrite)
-
+				}
+			}
 			return resp, nil
 		})
 	}, nil
