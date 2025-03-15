@@ -15,5 +15,7 @@ message Rewrite {
     HeadersPolicy response_headers_rewrite = 3;
     optional string strip_prefix = 4;
     optional string host_rewrite = 5;
+    optional string method_rewrite = 6;   // 新增方法重写
+    bool camel_case_conversion = 7;       // 新增驼峰转换
 }
 

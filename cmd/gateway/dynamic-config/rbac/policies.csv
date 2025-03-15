@@ -1,6 +1,6 @@
 p, public, /v1/auth, POST, allow
 p, public, /v1/products, GET, allow
-p, public, /ecommerce.product.v1.ProductService/*, POST, allow
+p, public, /v1/products/*, POST, allow
 
 p, user, /v1/auth/profile, GET, allow
 p, user, /v1/users/*, (GET|POST|PATCH|DELETE), allow

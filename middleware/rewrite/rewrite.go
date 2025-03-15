@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"unicode"
 
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
 	v1 "github.com/go-kratos/gateway/api/gateway/middleware/rewrite/v1"
-
 	"github.com/go-kratos/gateway/middleware"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -17,15 +17,38 @@ func init() {
 	middleware.Register("rewrite", Middleware)
 }
 
-func stripPrefix(origin string, prefix string) string {
-	out := strings.TrimPrefix(origin, prefix)
-	if out == "" {
-		return "/"
+func smartCamelCase(path string) string {
+	parts := strings.Split(path, "/")
+	if len(parts) < 3 {
+		return path
 	}
-	if out[0] != '/' {
-		return path.Join("/", out)
+
+	// 保留前缀 v1/products 不变
+	preserved := parts[:3]
+	rest := parts[3:]
+
+	var camelParts []string
+	for _, p := range rest {
+		if p == "" {
+			continue
+		}
+		// 处理连续大写字母（如ID→Id）
+		runes := []rune(p)
+		var builder strings.Builder
+		for i := 0; i < len(runes); i++ {
+			if i > 0 && unicode.IsUpper(runes[i]) && unicode.IsLower(runes[i-1]) {
+				builder.WriteRune(unicode.ToLower(runes[i]))
+			} else {
+				if i == 0 {
+					builder.WriteRune(unicode.ToUpper(runes[i]))
+				} else {
+					builder.WriteRune(runes[i])
+				}
+			}
+		}
+		camelParts = append(camelParts, builder.String())
 	}
-	return out
+	return strings.Join(append(preserved, camelParts...), "/")
 }
 
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
@@ -35,50 +58,28 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 			return nil, err
 		}
 	}
-	requestHeadersRewrite := options.RequestHeadersRewrite
-	responseHeadersRewrite := options.ResponseHeadersRewrite
+
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			if options.HostRewrite != nil {
-				req.Host = *options.HostRewrite
-			}
-			// 先处理strip_prefix
+			// 路径处理流程
 			if options.StripPrefix != nil {
-				req.URL.Path = stripPrefix(req.URL.Path, options.GetStripPrefix())
+				req.URL.Path = strings.TrimPrefix(req.URL.Path, options.GetStripPrefix())
 			}
-			// 然后处理path_rewrite
+
+			if options.CamelCaseConversion {
+				req.URL.Path = smartCamelCase(req.URL.Path)
+			}
+
 			if options.PathRewrite != nil {
-				// 拼接path_rewrite和当前路径
-				newPath := path.Join(*options.PathRewrite, req.URL.Path)
-				req.URL.Path = newPath
+				req.URL.Path = path.Join(*options.PathRewrite, req.URL.Path)
 			}
-			if requestHeadersRewrite != nil {
-				for key, value := range requestHeadersRewrite.Set {
-					req.Header.Set(key, value)
-				}
-				for key, value := range requestHeadersRewrite.Add {
-					req.Header.Add(key, value)
-				}
-				for _, value := range requestHeadersRewrite.Remove {
-					req.Header.Del(value)
-				}
+
+			// 强制方法转换（兼容旧配置）
+			if options.MethodRewrite != nil {
+				req.Method = *options.MethodRewrite
 			}
-			resp, err := next.RoundTrip(req)
-			if err != nil {
-				return nil, err
-			}
-			if responseHeadersRewrite != nil {
-				for key, value := range responseHeadersRewrite.Set {
-					resp.Header.Set(key, value)
-				}
-				for key, value := range responseHeadersRewrite.Add {
-					resp.Header.Add(key, value)
-				}
-				for _, value := range responseHeadersRewrite.Remove {
-					resp.Header.Del(value)
-				}
-			}
-			return resp, nil
+
+			return next.RoundTrip(req)
 		})
 	}, nil
 }
