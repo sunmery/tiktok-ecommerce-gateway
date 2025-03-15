@@ -214,9 +214,7 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			// 从上下文获取原始路径
-			originalPath := middleware.RequestPathFromContext(req.Context())
-			if methods, ok := skipRules[originalPath]; ok && methods[req.Method] {
+			if methods, ok := skipRules[req.URL.Path]; ok && methods[req.Method] {
 				return next.RoundTrip(req)
 			}
 

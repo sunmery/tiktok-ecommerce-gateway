@@ -290,7 +290,6 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 	}
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			logger.Debugf("Processing request: %s %s", req.Method, req.URL.Path)
 			if methods, ok := skipRules[req.URL.Path]; ok {
 				if methods[req.Method] {
 					return next.RoundTrip(req)
@@ -299,7 +298,6 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 
 			userID := req.Header.Get(userIdMetadataKey)
 			if userID == "" {
-				logger.Warnf("Missing user ID in request: %s", req.URL.Path)
 				return nil, fmt.Errorf("%w: 缺少用户标识", NotAuthZ)
 			}
 
@@ -311,9 +309,9 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 			fmt.Println("role, req.URL.Path, req.Method", role, req.URL.Path, req.Method)
 			enforcerMutex.RLock()
 			defer enforcerMutex.RUnlock()
-			allowed, syncedErr := syncedCachedEnforcer.Enforce(role, req.URL.Path, req.Method)
-			if syncedErr != nil {
-				return nil, fmt.Errorf("权限检查错误: %w", syncedErr)
+			allowed, err := syncedCachedEnforcer.Enforce(role, req.URL.Path, req.Method)
+			if err != nil {
+				return nil, fmt.Errorf("权限检查错误: %w", err)
 			}
 
 			if allowed {
