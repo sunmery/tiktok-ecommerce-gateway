@@ -84,11 +84,18 @@ func main() {
 	}
 
 	// 5. 初始化中间件
+	// JWT 中间件初始化
 	jwtErr := jwt.Init()
-	if err != nil {
+	if jwtErr != nil {
 		log.Fatalf("JWT 中间件初始化失败: %v", jwtErr)
-	} // JWT 中间件初始化
-	rbac.InitEnforcer() // RBAC 中间件初始化
+	}
+
+	// RBAC 中间件初始化
+	rbacErr := rbac.InitEnforcer()
+	if rbacErr != nil {
+		log.Fatalf("RBAC 中间件初始化失败: %v", jwtErr)
+		return
+	}
 
 	// 根据传入的服务发现创建客户端工厂
 	clientFactory := client.NewFactory(makeDiscovery())

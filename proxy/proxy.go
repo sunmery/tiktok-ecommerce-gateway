@@ -90,6 +90,20 @@ func setXFFHeader(req *http.Request) {
 	}
 }
 
+type ApiError struct {
+	Code    int    `json:"code"`
+	Message string `json:"msg"`
+	Detail  string `json:"detail,omitempty"`
+}
+
+var errorCodeMapping = map[int]int{
+	499: 1001,
+	504: 1002,
+	401: 2001,
+	403: 2002,
+	502: 3001,
+}
+
 func writeError(w http.ResponseWriter, r *http.Request, err error, labels middleware.MetricsLabels) {
 	var statusCode int
 	switch {
@@ -108,16 +122,26 @@ func writeError(w http.ResponseWriter, r *http.Request, err error, labels middle
 		log.Errorf("Failed to handle request: %s: %+v", r.URL.String(), err)
 		statusCode = 502
 	}
+
+	errResp := ApiError{
+		Code:    errorCodeMapping[statusCode],
+		Message: http.StatusText(statusCode),
+		Detail:  err.Error(),
+	}
+
 	requestsTotalIncr(r, labels, statusCode)
 	if labels.Protocol() == config.Protocol_GRPC.String() {
-		// see https://github.com/googleapis/googleapis/blob/master/google/rpc/code.proto
 		code := strconv.Itoa(int(status.ToGRPCCode(statusCode)))
 		w.Header().Set("Content-Type", "application/grpc")
 		w.Header().Set("Grpc-Status", code)
 		w.Header().Set("Grpc-Message", err.Error())
 		statusCode = 200
+	} else {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	}
+
 	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(errResp)
 }
 
 // notFoundHandler replies to the request with an HTTP 404 not found error.
