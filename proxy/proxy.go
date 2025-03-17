@@ -97,9 +97,10 @@ type ApiError struct {
 }
 
 var errorCodeMapping = map[int]int{
-	499: 1001,
 	504: 1002,
 	401: 2001,
+	499: 1001,
+	498: 2003, // 新增过期错误码
 	403: 2002,
 	502: 3001,
 }
@@ -112,7 +113,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error, labels middle
 		statusCode = 499
 	case errors.Is(err, context.DeadlineExceeded):
 		statusCode = 504
-	case errors.Is(err, jwt.NotAuthN):
+	case errors.Is(err, jwt.NotAuthN) || strings.Contains(err.Error(), "令牌已过期"):
 		log.Errorf("Failed for authN request: %s: %+v", r.URL.String(), err)
 		statusCode = http.StatusUnauthorized
 	case errors.Is(err, rbac.NotAuthZ):

@@ -6,31 +6,31 @@ version: v1.4.0
 # 环境变量
 envs:
   # 服务发现
-  DISCOVERY_DSN: "consul://DISCOVERY_DSN:8500"
+  DISCOVERY_DSN: consul://99.suyiiyii.top:3026
   # 服务发现配置路径
-  DISCOVERY_CONFIG_PATH: "ecommerce/gateway/config.yaml"
+  DISCOVERY_CONFIG_PATH: ecommerce/gateway/config.yaml
   # 输出的日志等级
-  LOG_LEVEL: "debug"
+  LOG_LEVEL: debug
   # Casdoor 地址
-  CASDOOR_URL: http://CASDOOR_URL:8000
+  CASDOOR_URL: http://159.75.231.54:8000
 
   # 是否使用 TLS, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
   USE_TLS: "false"
   # TLS 证书路径
-  CRT_FILE_PATH: "dynamic-config/tls/gateway.crt"
+  CRT_FILE_PATH: dynamic-config/tls/gateway.crt
   # TLS Key路径
-  KEY_FILE_PATH: "dynamic-config/tls/gateway.key"
+  KEY_FILE_PATH: dynamic-config/tls/gateway.key
 
   # JWT 公钥证书
-  JWT_PUBKEY_PATH: "/app/dynamic-config/policies/model.conf"
+  JWT_PUBKEY_PATH: dynamic-config/secrets/public.pem
 
   # RBAC模型文件路径
-  MODEL_FILE_PATH: "/app/dynamic-config/policies/model.conf"
+  MODEL_FILE_PATH: dynamic-config/policies/model.conf
   # RBAC策略文件路径
-  POLICIES_FILE_PATH: "/app/dynamic-config/policies/policies.csv"
+  POLICIES_FILE_PATH: dynamic-config/policies/policies.csv
 
 middlewares:
-  - name: transcoder
+  - name: ip
   # 前端跨域选项
   - name: cors
     options:
@@ -59,17 +59,13 @@ middlewares:
   - name: tracing
     options:
       '@type': type.googleapis.com/gateway.middleware.tracing.v1.Tracing
-      grpcEndpoint: '99.suyiiyii.top:3002'
-#      httpEndpoint: '99.suyiiyii.top:3003'
+      httpEndpoint: 99.suyiiyii.top:3003
       insecure: true
 #     认证
   - name: jwt
     # 无需认证的接口
     router_filter:
       rules:
-        - path: /ecommerce.product.v1.ProductService/*
-          methods:
-            - POST
         - path: /v1/categories/*
           methods:
             - GET
@@ -95,9 +91,6 @@ middlewares:
     # 不需要鉴权的接口
     router_filter:
       rules:
-        - path: /ecommerce.product.v1.ProductService/*
-          methods:
-            - POST
         - path: /v1/categories/*
           methods:
             - GET
@@ -121,30 +114,70 @@ middlewares:
             - POST
 
 endpoints:
-  - path: /ecommerce.product.v1.ProductService/*
-    protocol: GRPC
-    method: POST
+  - path: /v1/products*
+    protocol: HTTP
     backends:
       - target: 'discovery:///ecommerce-product-v1'
     timeout: 4s
     retry:
-      attempts: 3
-      perTryTimeout: 0.1s
+      attempts: 2
+      perTryTimeout: 2s
       conditions:
         - byStatusCode: '502-504'
         - byHeader:
             name: 'Grpc-Status'
             value: '14'
 
-  - path: /ecommerce.category.v1.CategoryService/*
-    protocol: GRPC
-    method: POST
+  - path: /v1/merchants*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-product-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/categories*
+    protocol: HTTP
     backends:
       - target: 'discovery:///ecommerce-category-v1'
     timeout: 4s
     retry:
-      attempts: 3
-      perTryTimeout: 0.1s
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/auth*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-auth-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/users*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-user-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
       conditions:
         - byStatusCode: '502-504'
         - byHeader:

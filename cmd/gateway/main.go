@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-kratos/gateway/middleware/ip"
+
 	"github.com/go-kratos/gateway/client"
 	"github.com/go-kratos/gateway/config"
 	configLoader "github.com/go-kratos/gateway/config/config-loader"
@@ -96,6 +98,9 @@ func main() {
 		log.Fatalf("RBAC 中间件初始化失败: %v", jwtErr)
 		return
 	}
+
+	// IP 中间件初始化
+	ip.Init()
 
 	// 根据传入的服务发现创建客户端工厂
 	clientFactory := client.NewFactory(makeDiscovery())
