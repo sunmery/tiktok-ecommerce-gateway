@@ -288,11 +288,15 @@ func (p *Proxy) buildEndpoint(e *config.Endpoint, ms []*config.Middleware) (_ ht
 		}
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// 在请求处理开始时保存原始路径
+		ctx := context.WithValue(req.Context(), middleware.RequestPathKey, req.URL.Path)
+		req = req.WithContext(ctx)
+
 		startTime := time.Now()
 		setXFFHeader(req)
 
 		reqOpts := middleware.NewRequestOptions(e)
-		ctx := middleware.NewRequestContext(req.Context(), reqOpts)
+		ctx = middleware.NewRequestContext(req.Context(), reqOpts)
 		ctx, cancel := context.WithTimeout(ctx, retryStrategy.timeout)
 		defer cancel()
 		defer func() {

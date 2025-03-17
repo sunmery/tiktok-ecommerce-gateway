@@ -1,11 +1,17 @@
 package middleware
 
 import (
+	"context"
 	"io"
 	"net/http"
 
 	configv1 "github.com/go-kratos/gateway/api/gateway/config/v1"
 )
+
+type contextKey struct{ name string }
+
+// RequestPathKey 用于存储原始请求路径的上下文键
+var RequestPathKey = &contextKey{"RequestPath"}
 
 // Factory is a middleware factory.
 type Factory func(*configv1.Middleware) (Middleware, error)
@@ -22,10 +28,23 @@ func (f RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
-type FactoryV2 func(*configv1.Middleware) (MiddlewareV2, error)
-type MiddlewareV2 interface {
-	Process(http.RoundTripper) http.RoundTripper
-	io.Closer
+type (
+	FactoryV2    func(*configv1.Middleware) (MiddlewareV2, error)
+	MiddlewareV2 interface {
+		Process(http.RoundTripper) http.RoundTripper
+		io.Closer
+	}
+)
+
+func WithRequestPath(ctx context.Context, path string) context.Context {
+	return context.WithValue(ctx, RequestPathKey, path)
+}
+
+func RequestPathFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(RequestPathKey).(string); ok {
+		return v
+	}
+	return ""
 }
 
 func wrapFactory(in Factory) FactoryV2 {

@@ -39,14 +39,18 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 	responseHeadersRewrite := options.ResponseHeadersRewrite
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			if options.PathRewrite != nil {
-				req.URL.Path = *options.PathRewrite
-			}
 			if options.HostRewrite != nil {
 				req.Host = *options.HostRewrite
 			}
+			// 先处理strip_prefix
 			if options.StripPrefix != nil {
 				req.URL.Path = stripPrefix(req.URL.Path, options.GetStripPrefix())
+			}
+			// 然后处理path_rewrite
+			if options.PathRewrite != nil {
+				// 拼接path_rewrite和当前路径
+				newPath := path.Join(*options.PathRewrite, req.URL.Path)
+				req.URL.Path = newPath
 			}
 			if requestHeadersRewrite != nil {
 				for key, value := range requestHeadersRewrite.Set {
@@ -57,7 +61,6 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 				}
 				for _, value := range requestHeadersRewrite.Remove {
 					req.Header.Del(value)
-
 				}
 			}
 			resp, err := next.RoundTrip(req)
@@ -73,7 +76,6 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 				}
 				for _, value := range responseHeadersRewrite.Remove {
 					resp.Header.Del(value)
-
 				}
 			}
 			return resp, nil
