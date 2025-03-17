@@ -177,6 +177,7 @@ func validatePublicKey(tempPath string) error {
 }
 
 type CustomClaims struct {
+	jwt.RegisteredClaims
 	auth.User
 }
 
@@ -197,7 +198,10 @@ func ParseJwt(tokenString string) (*CustomClaims, error) {
 	if claims, ok := t.Claims.(*CustomClaims); ok && t.Valid {
 		return claims, nil
 	}
-	return nil, errors.New("无效的令牌声明")
+	if errors.Is(err, jwt.ErrTokenExpired) {
+		return nil, fmt.Errorf("%w: 令牌已过期", NotAuthN)
+	}
+	return nil, fmt.Errorf("%w: %v", NotAuthN, errors.New("无效的令牌声明"))
 }
 
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
@@ -230,7 +234,7 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 				return nil, fmt.Errorf("%w: %v", NotAuthN, err)
 			}
 
-			req.Header.Set(constants.UserIdMetadataKey, claims.ID)
+			req.Header.Set(constants.UserIdMetadataKey, claims.User.ID)
 			req.Header.Set(constants.UserOwner, claims.Owner)
 			return next.RoundTrip(req)
 		})

@@ -14,7 +14,6 @@ envs:
   # Casdoor 地址
   CASDOOR_URL: http://159.75.231.54:8000
 
-  # 布尔值需要加引号.
   # 是否使用 TLS, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
   USE_TLS: "false"
   # TLS 证书路径
@@ -23,19 +22,15 @@ envs:
   KEY_FILE_PATH: dynamic-config/tls/gateway.key
 
   # JWT 公钥证书
-  JWT_PUBKEY_PATH: dynamic-config/policies/model.conf
+  JWT_PUBKEY_PATH: dynamic-config/secrets/public.pem
 
   # RBAC模型文件路径
   MODEL_FILE_PATH: dynamic-config/policies/model.conf
   # RBAC策略文件路径
   POLICIES_FILE_PATH: dynamic-config/policies/policies.csv
 
-  # 部署时配置:
-  #  JWT_PUBKEY_PATH: /app/dynamic-config/policies/model.conf
-  #  MODEL_FILE_PATH: /app/dynamic-config/policies/model.conf
-  #  POLICIES_FILE_PATH: /app/dynamic-config/policies/policies.csv
-
 middlewares:
+  - name: ip
   # 前端跨域选项
   - name: cors
     options:
@@ -64,16 +59,13 @@ middlewares:
   - name: tracing
     options:
       '@type': type.googleapis.com/gateway.middleware.tracing.v1.Tracing
-      httpEndpoint: '99.suyiiyii.top:3003'
+      httpEndpoint: 99.suyiiyii.top:3003
       insecure: true
-  #     认证
+#     认证
   - name: jwt
     # 无需认证的接口
     router_filter:
       rules:
-        - path: /ecommerce.product.v1.ProductService/*
-          methods:
-            - POST
         - path: /v1/categories/*
           methods:
             - GET
@@ -99,9 +91,6 @@ middlewares:
     # 不需要鉴权的接口
     router_filter:
       rules:
-        - path: /ecommerce.product.v1.ProductService/*
-          methods:
-            - POST
         - path: /v1/categories/*
           methods:
             - GET
@@ -123,152 +112,74 @@ middlewares:
           methods:
             - OPTIONS
             - POST
-  - name: transcoder
+
 endpoints:
-  - path: /v1/products/*
-    protocol: GRPC
-    method: POST
+  - path: /v1/products*
+    protocol: HTTP
     backends:
       - target: 'discovery:///ecommerce-product-v1'
     timeout: 4s
     retry:
-      attempts: 3
-      perTryTimeout: 0.1s
+      attempts: 2
+      perTryTimeout: 2s
       conditions:
         - byStatusCode: '502-504'
         - byHeader:
             name: 'Grpc-Status'
             value: '14'
-    middlewares:
-      - name: rewrite
-        options:
-          '@type': type.googleapis.com/gateway.middleware.rewrite.v1.Rewrite
-          strip_prefix: "/v1/products"
-          path_rewrite: "/ecommerce.product.v1.ProductService/"
-          request_headers_rewrite:
-            set:
-              X-API-Version: "1.0"
-            add:
-              X-Request-Id: "12345"
-            remove: [ "Old-Header" ]
-      - name: transcoder
 
-#  - path: /ecommerce.category.v1.CategoryService/*
-#    protocol: GRPC
-#    method: POST
-#    backends:
-#      - target: 'discovery:///ecommerce-category-v1'
-#    timeout: 4s
-#    retry:
-#      attempts: 3
-#      perTryTimeout: 0.1s
-#      conditions:
-#        - byStatusCode: '502-504'
-#        - byHeader:
-#            name: 'Grpc-Status'
-#            value: '14'
-#
-#  - path: /ecommerce.assistant.v1.Assistant/*
-#    protocol: GRPC
-#    method: POST
-#    backends:
-#      - target: 'discovery:///ecommerce-assistant-v1'
-#    timeout: 4s
-#    retry:
-#      attempts: 3
-#      perTryTimeout: 0.1s
-#      conditions:
-#        - byStatusCode: '502-504'
-#        - byHeader:
-#            name: 'Grpc-Status'
-#            value: '14'
-#
-#  - path: /ecommerce.auth.v1.AuthService/*
-#    protocol: GRPC
-#    method: POST
-#    backends:
-#      - target: 'discovery:///ecommerce-auth-v1'
-#    timeout: 4s
-#    retry:
-#      attempts: 3
-#      perTryTimeout: 0.1s
-#      conditions:
-#        - byStatusCode: '502-504'
-#        - byHeader:
-#            name: 'Grpc-Status'
-#            value: '14'
-#
-#  - path: /ecommerce.cart.v1.CartService/*
-#    protocol: GRPC
-#    method: POST
-#    backends:
-#      - target: 'discovery:///ecommerce-cart-v1'
-#    timeout: 4s
-#    retry:
-#      attempts: 3
-#      perTryTimeout: 0.1s
-#      conditions:
-#        - byStatusCode: '502-504'
-#        - byHeader:
-#            name: 'Grpc-Status'
-#            value: '14'
-#
-#  - path: /ecommerce.checkout.v1.CheckoutService/*
-#    protocol: GRPC
-#    method: POST
-#    backends:
-#      - target: 'discovery:///ecommerce-checkout-v1'
-#    timeout: 4s
-#    retry:
-#      attempts: 3
-#      perTryTimeout: 0.1s
-#      conditions:
-#        - byStatusCode: '502-504'
-#        - byHeader:
-#            name: 'Grpc-Status'
-#            value: '14'
-#
-#  - path: /ecommerce.order.v1.OrderService/*
-#    protocol: GRPC
-#    method: POST
-#    backends:
-#      - target: 'discovery:///ecommerce-order-v1'
-#    timeout: 4s
-#    retry:
-#      attempts: 3
-#      perTryTimeout: 0.1s
-#      conditions:
-#        - byStatusCode: '502-504'
-#        - byHeader:
-#            name: 'Grpc-Status'
-#            value: '14'
-#
-#  - path: /ecommerce.payment.v1.PaymentService/*
-#    protocol: GRPC
-#    method: POST
-#    backends:
-#      - target: 'discovery:///ecommerce-payment-v1'
-#    timeout: 4s
-#    retry:
-#      attempts: 3
-#      perTryTimeout: 0.1s
-#      conditions:
-#        - byStatusCode: '502-504'
-#        - byHeader:
-#            name: 'Grpc-Status'
-#            value: '14'
-#
-#  - path: /ecommerce.user.v1.UserService/*
-#    protocol: GRPC
-#    method: POST
-#    backends:
-#      - target: 'discovery:///ecommerce-user-v1'
-#    timeout: 4s
-#    retry:
-#      attempts: 3
-#      perTryTimeout: 0.1s
-#      conditions:
-#        - byStatusCode: '502-504'
-#        - byHeader:
-#            name: 'Grpc-Status'
-#            value: '14'
+  - path: /v1/merchants*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-product-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/categories*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-category-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/auth*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-auth-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/users*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-user-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
