@@ -3,6 +3,12 @@ package routerfilter
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
 	v1 "github.com/go-kratos/gateway/api/gateway/middleware/routerfilter/v1"
 	"github.com/go-kratos/gateway/middleware"
@@ -12,11 +18,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-	"io"
-	"net/http"
-	"regexp"
-	"strings"
-	"time"
 )
 
 const (
@@ -74,10 +75,13 @@ type PathMatcher struct {
 }
 
 func NewPathMatcher(pattern string, methods []string) (*PathMatcher, error) {
-	// 增强路径匹配能力
-	pattern = strings.SplitN(pattern, "?", 2)[0] // 忽略查询参数
-	pattern = strings.TrimSuffix(pattern, "/")   // 统一路径格式
-	// 解析路径参数和通配符
+	// 预处理模式
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return nil, fmt.Errorf("empty pattern")
+	}
+
+	// 解析路径参数
 	paramRegex := regexp.MustCompile(`{(\w+)}`)
 	matches := paramRegex.FindAllStringSubmatch(pattern, -1)
 	paramNames := make([]string, 0, len(matches))
@@ -97,13 +101,22 @@ func NewPathMatcher(pattern string, methods []string) (*PathMatcher, error) {
 	// 构建正则表达式
 	// 先处理更长的通配符（如 /**），避免替换冲突
 	replacer := strings.NewReplacer(
-		"/**", "/.*",
-		"/*/", "/[^/]*/",
-		"/*", "/[^/]*",
+		"/**", "(?:/.*)?$",
+		"/*", "(?:/[^/]+)?",
 		"{", "(?P<",
-		"}", ">[^/]*)",
+		"}", ">[^/]+)",
 	)
-	regexPattern := "^" + replacer.Replace(pattern) + "$"
+	// 处理路径分隔符
+	pattern = strings.TrimSuffix(pattern, "/")
+	if !strings.HasPrefix(pattern, "/") {
+		pattern = "/" + pattern
+	}
+
+	// 构建最终正则表达式
+	regexPattern := "^" + replacer.Replace(pattern)
+	if !strings.HasSuffix(pattern, "/**") {
+		regexPattern += "$"
+	}
 
 	compiled, err := regexp.Compile(regexPattern)
 	if err != nil {
@@ -125,12 +138,15 @@ func NewPathMatcher(pattern string, methods []string) (*PathMatcher, error) {
 }
 
 func (m *PathMatcher) Match(req *http.Request) (bool, map[string]string) {
-	// 统一格式：去除前后斜杠并转为小写
-	path := strings.TrimSuffix(req.URL.Path, "/")
+	// 规范化请求路径
+	path := req.URL.Path
 	if path == "" {
 		path = "/"
 	}
-	// pattern := strings.TrimPrefix(strings.TrimSuffix(m.rawPattern, "/"), "/")
+	// 确保路径以/开头
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
 
 	// 方法检查
 	if len(m.methods) > 0 {

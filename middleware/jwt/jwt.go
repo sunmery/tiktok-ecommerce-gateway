@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-kratos/gateway/middleware/routerfilter"
+
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
 	"github.com/go-kratos/gateway/constants"
 	"github.com/go-kratos/gateway/middleware"
@@ -205,23 +207,28 @@ func ParseJwt(tokenString string) (*CustomClaims, error) {
 }
 
 func Middleware(c *config.Middleware) (middleware.Middleware, error) {
-	skipRules := make(map[string]map[string]bool)
+	matchers := make([]*routerfilter.PathMatcher, 0)
 	if c.GetRouterFilter() != nil {
 		for _, rule := range c.GetRouterFilter().Rules {
-			methods := make(map[string]bool)
-			for _, m := range rule.Methods {
-				methods[strings.ToUpper(m)] = true
+			matcher, err := routerfilter.NewPathMatcher(rule.Path, rule.Methods)
+			if err != nil {
+				return nil, fmt.Errorf("创建路径匹配器失败: %w", err)
 			}
-			skipRules[rule.Path] = methods
+			matchers = append(matchers, matcher)
 		}
 	}
 
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			// 从上下文获取原始路径
-			originalPath := middleware.RequestPathFromContext(req.Context())
-			if methods, ok := skipRules[originalPath]; ok && methods[req.Method] {
-				return next.RoundTrip(req)
+			// 记录请求路径用于调试
+			log.Infof("[JWT] 处理请求: %s %s", req.Method, req.URL.Path)
+
+			// 检查是否匹配跳过规则
+			for _, matcher := range matchers {
+				if ok, _ := matcher.Match(req); ok {
+					log.Infof("[JWT] 请求匹配跳过规则，不需要JWT验证: %s %s", req.Method, req.URL.Path)
+					return next.RoundTrip(req)
+				}
 			}
 
 			authHeader := req.Header.Get("Authorization")
