@@ -17,10 +17,11 @@ const (
 	JwtPubkeyPath = "JWT_PUBKEY_PATH"
 
 	// UseTLS TLS 配置
-	UseTLS  = "USE_TLS" // 是否使用TLS
-	TlsDir  = "TLS_DIR"
-	CrtFile = "CRT_FILE_PATH"
-	KeyFile = "KEY_FILE_PATH"
+	UseTLS   = "USE_TLS"   // 是否使用TLS
+	UseHttp3 = "USE_HTTP3" // 是否使用HTTP/3
+	TlsDir   = "TLS_DIR"
+	CrtFile  = "CRT_FILE_PATH"
+	KeyFile  = "KEY_FILE_PATH"
 
 	PoliciesfilePath = "POLICIES_FILE_PATH"
 	ModelFilePath    = "MODEL_FILE_PATH"

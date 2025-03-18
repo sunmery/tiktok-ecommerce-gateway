@@ -3,13 +3,13 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/go-kratos/gateway/constants"
+	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
@@ -50,13 +50,15 @@ func init() {
 // ProxyServer is a proxy server.
 type ProxyServer struct {
 	*http.Server
-	useTLS bool
+	h3Server *http3.Server
+	useTLS   bool
+	useH3    bool
 }
 
 // NewProxy new a gateway server.
 func NewProxy(handler http.Handler, addr string) *ProxyServer {
-	// useTLS := os.Getenv(constants.UseTLS) == "true"
-	useTLS := false
+	useTLS := os.Getenv(constants.UseTLS) == "true"
+	useH3 := os.Getenv(constants.UseHttp3) == "true"
 	var tlsConfig *tls.Config
 
 	if useTLS {
@@ -92,34 +94,47 @@ func NewProxy(handler http.Handler, addr string) *ProxyServer {
 		}
 	}
 
-	return &ProxyServer{
+	ps := &ProxyServer{
 		Server: &http.Server{
 			Addr:              addr,
-			TLSConfig:         tlsConfig,
-			Handler:           h2c.NewHandler(handler, &http2.Server{}), // 显式启用 h2c 处理来支持非加密的 HTTP/2 通信
+			TLSConfig:         tlsConfig,                                // 启用 TLS 时支持 HTTP/2 over TLS
+			Handler:           h2c.NewHandler(handler, &http2.Server{}), // 处理 HTTP/2 明文或 HTTPS
 			ReadTimeout:       readTimeout,
 			ReadHeaderTimeout: readHeaderTimeout,
 			WriteTimeout:      writeTimeout,
 			IdleTimeout:       idleTimeout,
 		},
 		useTLS: useTLS,
+		useH3:  useH3,
 	}
+
+	if useH3 && tlsConfig != nil {
+		ps.h3Server = &http3.Server{ // 独立监听 HTTP/3 请求
+			Addr:      addr,
+			TLSConfig: tlsConfig,
+			Handler:   handler,
+		}
+	}
+
+	return ps
 }
 
 // Start the server.
 func (s *ProxyServer) Start(ctx context.Context) error {
-	log.Infof("proxy listening on %s", s.Addr)
-	var err error
+	log.Infof("proxy listening on %s (HTTP/3:%v)", s.Addr, s.useH3)
+
+	if s.h3Server != nil {
+		go func() {
+			if err := s.h3Server.ListenAndServe(); err != nil {
+				log.Errorf("HTTP/3 server error: %v", err)
+			}
+		}()
+	}
+
 	if s.useTLS {
-		// 证书已在 TLSConfig 中加载, 参数留空即可
-		err = s.ListenAndServeTLS("", "")
-	} else {
-		err = s.ListenAndServe()
+		return s.ListenAndServeTLS("", "")
 	}
-	if errors.Is(err, http.ErrServerClosed) {
-		return nil
-	}
-	return err
+	return s.ListenAndServe()
 }
 
 // Stop the server.

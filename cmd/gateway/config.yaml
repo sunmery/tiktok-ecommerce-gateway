@@ -15,7 +15,9 @@ envs:
   CASDOOR_URL: http://159.75.231.54:8000
 
   # 是否使用 TLS, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
-  USE_TLS: "false"
+  USE_TLS: "true"
+  # 是否使用 HTTP3, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
+  USE_HTTP3: "true"
   # TLS 证书路径
   CRT_FILE_PATH: dynamic-config/tls/gateway.crt
   # TLS Key路径
@@ -61,7 +63,7 @@ middlewares:
       '@type': type.googleapis.com/gateway.middleware.tracing.v1.Tracing
       httpEndpoint: 99.suyiiyii.top:3003
       insecure: true
-#     认证
+  #     认证
   - name: jwt
     # 无需认证的接口
     router_filter:
