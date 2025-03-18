@@ -20,6 +20,7 @@ import (
 	config "github.com/go-kratos/gateway/api/gateway/config/v1"
 	"github.com/go-kratos/gateway/constants"
 	"github.com/go-kratos/gateway/middleware"
+	"github.com/go-kratos/gateway/middleware/routerfilter"
 	"github.com/go-kratos/gateway/pkg/loader"
 	"github.com/go-kratos/kratos/v2/log"
 )
@@ -281,20 +282,37 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 	}
 
 	skipRules := make(map[string]map[string]bool)
+	matchers := make([]*routerfilter.PathMatcher, 0)
 	for _, rule := range routerFilter.Rules {
 		methods := make(map[string]bool)
 		for _, m := range rule.Methods {
 			methods[strings.ToUpper(m)] = true
 		}
 		skipRules[rule.Path] = methods
+
+		// 创建路径匹配器
+		matcher, err := routerfilter.NewPathMatcher(rule.Path, rule.Methods)
+		if err != nil {
+			return nil, fmt.Errorf("创建路径匹配器失败: %w", err)
+		}
+		matchers = append(matchers, matcher)
 	}
 	return func(next http.RoundTripper) http.RoundTripper {
 		return middleware.RoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 			logger.Debugf("Processing request: %s %s", req.Method, req.URL.Path)
-			if methods, ok := skipRules[req.URL.Path]; ok {
-				if methods[req.Method] {
-					return next.RoundTrip(req)
+
+			// 使用PathMatcher进行路径匹配
+			skipAuth := false
+			for _, matcher := range matchers {
+				if ok, _ := matcher.Match(req); ok {
+					logger.Infof("[RBAC] 请求匹配跳过规则，不需要权限验证: %s %s", req.Method, req.URL.Path)
+					skipAuth = true
+					break
 				}
+			}
+
+			if skipAuth {
+				return next.RoundTrip(req)
 			}
 
 			userID := req.Header.Get(userIdMetadataKey)

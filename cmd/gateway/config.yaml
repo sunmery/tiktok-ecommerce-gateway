@@ -70,7 +70,7 @@ middlewares:
           methods:
             - GET
             - OPTIONS
-        - path: /v1/products
+        - path: /v1/products/*
           methods:
             - GET
             - OPTIONS
@@ -95,9 +95,8 @@ middlewares:
           methods:
             - GET
             - OPTIONS
-        - path: /v1/products
+        - path: /v1/products/*
           methods:
-            - POST
             - GET
             - OPTIONS
         - path: /v1/auth
