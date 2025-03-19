@@ -16,8 +16,11 @@ envs:
 
   # 是否使用 TLS, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
   USE_TLS: "true"
-  # 是否使用 HTTP3, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
   USE_HTTP3: "true"
+  # TCP for HTTP/1.1 & HTTP/2
+  HTTP_PORT: ":443"
+  # UDP for HTTP/3
+  HTTP3_PORT: ":443"
   # TLS 证书路径
   CRT_FILE_PATH: dynamic-config/tls/gateway.crt
   # TLS Key路径
@@ -50,6 +53,7 @@ middlewares:
         - http://localhost:3000
         - http://localhost:3001
         - https://localhost:8443
+        - https://localhost:3000
       allowMethods:
         - OPTIONS
         - GET

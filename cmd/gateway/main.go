@@ -44,14 +44,12 @@ import (
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
-	"github.com/go-kratos/kratos/v2/transport"
 )
 
 var (
 	ctrlName          string
 	ctrlService       string
 	discoveryDSN      string
-	proxyAddrs        []string
 	proxyConfig       string
 	priorityConfigDir string
 	withDebug         bool
@@ -164,15 +162,11 @@ func main() {
 
 	serverHandler = auth.Handler(serverHandler)
 
-	servers := make([]transport.Server, 0, len(proxyAddrs))
-	for _, addr := range proxyAddrs {
-		servers = append(servers, server.NewProxy(serverHandler, addr))
-	}
 	app := kratos.New(
 		kratos.Name(bc.Name),
 		kratos.Context(ctx),
 		kratos.Server(
-			servers...,
+			server.NewProxy(serverHandler),
 		),
 	)
 	if err := app.Run(); err != nil {
@@ -183,27 +177,7 @@ func main() {
 // 从环境变量读取配置
 func initConfig() {
 	rand.Seed(uint64(time.Now().Nanosecond()))
-	// 代理地址解析优化
-	envAddrs := os.Getenv(constants.ProxyAddrs)
-	if envAddrs == "" {
-		// 环境变量未设置时使用默认值
-		proxyAddrs = []string{":8080"}
-	} else {
-		// 处理可能存在的空元素（如 "8080,,8081"）
-		splitAddrs := strings.Split(envAddrs, ",")
-		validAddrs := make([]string, 0, len(splitAddrs))
-		for _, addr := range splitAddrs {
-			if trimmed := strings.TrimSpace(addr); trimmed != "" {
-				validAddrs = append(validAddrs, trimmed)
-			}
-		}
-		if len(validAddrs) == 0 {
-			// 环境变量值无效时回退默认值
-			proxyAddrs = []string{":8080"}
-		} else {
-			proxyAddrs = validAddrs
-		}
-	}
+
 	withDebug = os.Getenv(constants.Debug) == "true"
 	proxyConfig = os.Getenv(constants.DiscoveryConfigPath)
 	if proxyConfig == "" {

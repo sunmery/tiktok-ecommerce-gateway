@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net"
@@ -17,11 +18,13 @@ import (
 	"github.com/go-kratos/gateway/middleware"
 )
 
-var _ selector.Node = &node{}
-var _globalClient = defaultClient()
-var _globalH2Client = defaultH2Client()
-var _dialTimeout = 200 * time.Millisecond
-var followRedirect = false
+var (
+	_               selector.Node = &node{}
+	_globalClient                 = defaultClient()
+	_globalH2Client               = defaultH2Client()
+	_dialTimeout                  = 200 * time.Millisecond
+	followRedirect                = false
+)
 
 func init() {
 	var err error
@@ -84,10 +87,26 @@ func defaultH2Client() *http.Client {
 			// So http2.Transport doesn't complain the URL scheme isn't 'https'
 			AllowHTTP:          true,
 			DisableCompression: true,
-			// Pretend we are dialing a TLS endpoint.
-			// Note, we ignore the passed tls.Config
-			DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
-				return net.DialTimeout(network, addr, _dialTimeout)
+			// 正确处理TLS连接
+			// 使用传入的tls.Config或创建默认配置
+			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+				dialer := &net.Dialer{Timeout: _dialTimeout}
+				conn, err := dialer.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+
+				// 如果没有提供TLS配置，创建一个默认的
+				tlsConfig := cfg
+				if tlsConfig == nil {
+					tlsConfig = &tls.Config{
+						InsecureSkipVerify: true,
+						MinVersion:         tls.VersionTLS12,
+					}
+				}
+
+				// 返回TLS连接
+				return tls.Client(conn, tlsConfig), nil
 			},
 		},
 	}
