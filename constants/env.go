@@ -17,11 +17,13 @@ const (
 	JwtPubkeyPath = "JWT_PUBKEY_PATH"
 
 	// UseTLS TLS 配置
-	UseTLS   = "USE_TLS"   // 是否使用TLS
-	UseHttp3 = "USE_HTTP3" // 是否使用HTTP/3
-	TlsDir   = "TLS_DIR"
-	CrtFile  = "CRT_FILE_PATH"
-	KeyFile  = "KEY_FILE_PATH"
+	UseTLS    = "USE_TLS"    // 是否使用TLS
+	UseHttp3  = "USE_HTTP3"  // 是否使用HTTP/3
+	HTTPPort  = "HTTP_PORT"  // TCP for HTTP/1.1 & HTTP/2
+	HTTP3Port = "HTTP3_PORT" // UDP for HTTP/3
+	TlsDir    = "TLS_DIR"
+	CrtFile   = "CRT_FILE_PATH"
+	KeyFile   = "KEY_FILE_PATH"
 
 	PoliciesfilePath = "POLICIES_FILE_PATH"
 	ModelFilePath    = "MODEL_FILE_PATH"
@@ -67,7 +69,9 @@ const (
 	PoliciesfileName  = "policies.csv"
 	ModelFileFileName = "model.conf"
 
-	TlsDirName  = "tls"
-	CrtFileName = "gateway.crt"
-	KeyFileName = "gateway.key"
+	TlsDirName       = "tls"
+	DefaultHTTPPort  = ":443" // TCP for HTTP/1.1 & HTTP/2
+	DefaultHTTP3Port = ":443" // UDP for HTTP/3
+	CrtFileName      = "gateway.crt"
+	KeyFileName      = "gateway.key"
 )

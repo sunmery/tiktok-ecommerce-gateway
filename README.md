@@ -145,81 +145,41 @@ import (
 * restful: /api/echo/{name}
 
 ## TLS
-1. 开发测试时可以使用自签名证书, 生产需要使用真实的证书, 这里使用的是自签名证书, 
+1. 开发测试时可以使用自签名证书, 生产需要使用真实的证书, 项目支持自签名证书的生成, 可以使用以下命令生成自签名证书:
 ```bash
- # 生成私钥和证书（CN=localhost）
-openssl req -x509 -nodes -newkey rsa:2048 \
-  -keyout  cmd/gateway/tls/gateway.key \
-  -out cmd/gateway/tls/gateway.crt \
-  -subj "/CN=localhost" \
-  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+make https
 ```
 
 2. 创建TLS配置
 
-修改 `server/proxy.go`的NewProxy函数:
-kratos gateway 默认是明文HTTP/2(即 gRPC也是明文传输), 需要删除它的明文传输, 改为TLS加密传输, 并添加TLS证书
-```go
-package server
-
-import (
-	"crypto/tls"
-	"net/http"
-)
-
-func NewProxy(handler http.Handler, addr string) *ProxyServer {
-	// TLS证书
-	cert, err := tls.LoadX509KeyPair("tls/gateway.crt", "tls/gateway.key")
-	if err != nil {
-		log.Fatalf("Failed to load certificate: %v", err)
-	}
-	return &ProxyServer{
-		Server: &http.Server{
-			Addr: addr,
-			TLSConfig: &tls.Config{
-				Certificates: []tls.Certificate{cert}, // 添加证书
-				MinVersion:   tls.VersionTLS12,        //  // 设置最低支持的 TLS 版本
-			},
-			// TLS HTTP/2 标准加密传输协议
-			Handler: handler,
-
-			// 明文 HTTP/2
-			// Handler: h2c.NewHandler(handler, &http2.Server{
-			// 	IdleTimeout:          idleTimeout,
-			// 	MaxConcurrentStreams: math.MaxUint32,
-			// }),
-
-			ReadTimeout:       readTimeout,
-			ReadHeaderTimeout: readHeaderTimeout,
-			WriteTimeout:      writeTimeout,
-			IdleTimeout:       idleTimeout,
-		},
-	}
-}
-
+- USE_TLS: bool, 告诉网关使用TLS , 默认使用h2c协议, 即HTTP/2 over TCP, 即HTTP/2的明文传输
+- USE_HTTP3: bool, 告诉网关使用HTTP/3 + QUIC, 实现使用 quic-go/quic-go
+- HTTP_PORT: string, 告诉网关使用的端口, 使用TCP for HTTP/1.1 & HTTP/2, 例如: ":443"
+- HTTP3_PORT: string, 告诉网关使用的端口, 使用UDP for HTTP/3, 例如: ":443", 当 TCP 和 UDP 端口重合时, 网关通过TLS的ALPN自动协商实现无缝回退
+- CRT_FILE_PATH: string, 告诉网关使用的证书文件路径, 例如: "dynamic-config/tls/gateway.crt", 开发时保持默认值即可, 生产环境时需要把证书替换并修改名为`gateway.crt`
+- KEY_FILE_PATH: string, 告诉网关使用的证书文件路径, 例如: "dynamic-config/tls/gateway.key", 开发时保持默认值即可, 生产环境时需要把证书替换并修改名为`gateway.key`
+最低可运行示例:
+修改`cmd/gateway/config.yaml` 然后复制到 Consul KV 中
+```yaml
+envs:
+  # 服务发现
+  DISCOVERY_DSN: consul://example.com:8500
+  # 服务发现配置路径
+  DISCOVERY_CONFIG_PATH: ecommerce/gateway/config.yaml
+  # 是否使用 TLS, 为 true 则使用, 需要配置CRT_FILE_PATH和KEY_FILE_PATH参数, 指定相对于入口文件(main.go)执行的路径
+  USE_TLS: "true"
+  USE_HTTP3: "true"
+  # TCP for HTTP/1.1 & HTTP/2
+  HTTP_PORT: ":443"
+  # UDP for HTTP/3
+  HTTP3_PORT: ":443"
+  # TLS 证书路径
+  CRT_FILE_PATH: dynamic-config/tls/gateway.crt
+  # TLS Key路径
+  KEY_FILE_PATH: dynamic-config/tls/gateway.key
 ```
 
-3. 修改启动方式, ListenAndServe() 启动服务，该方法只支持 HTTP 协议。对于 HTTPS 服务，必须使用 ListenAndServeTLS() 方法
-证书已在 TLSConfig 中加载, 参数留空即可, 也可以在这里使用证书文件路径, TLSConfig 结构体就不需要添加
-```go
-package server
-
-// Start the server.
-func (s *ProxyServer) Start(ctx context.Context) error {
-	log.Infof("proxy listening on %s", s.Addr)
-	// HTTP
-	// err := s.ListenAndServe()
-
-	// TLS
-	// 证书已在 TLSConfig 中加载, 参数留空即可
-	err := s.ListenAndServeTLS("", "")
-	if errors.Is(err, http.ErrServerClosed) {
-		return nil
-	}
-	return err
-}
-
-```
+![img.png](img.png)
 
 # Middleware
 * cors

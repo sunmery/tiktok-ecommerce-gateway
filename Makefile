@@ -25,6 +25,6 @@ build:
       --build-arg GATEWAY_PORT=$(GATEWAY_PORT) \
       --platform $(PLATFORM_1),$(PLATFORM_2) \
       --push
+
 https:
-	DOMAIN=your-domain.com
-	openssl req -x509 -newkey rsa:4096 -nodes -keyout key.pem -out cert.pem -days 365 -subj "/CN=$(DOMAIN)"
+	chmod +x cmd/gateway/dynamic-config/tls/generate-cert.sh && cmd/gateway/dynamic-config/tls//generate-cert.sh

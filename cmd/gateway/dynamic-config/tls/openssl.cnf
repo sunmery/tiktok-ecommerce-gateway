@@ -1,0 +1,20 @@
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+x509_extensions = v3_ca
+
+[req_distinguished_name]
+CN = gw.apikv.com
+
+[v3_req]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = DNS:localhost,DNS:127.0.0.1,DNS:gw.apikv.com,IP:127.0.0.1
+
+[v3_ca]
+basicConstraints = CA:TRUE
+keyUsage = digitalSignature, keyCertSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
