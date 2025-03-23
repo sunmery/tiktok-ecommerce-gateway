@@ -120,7 +120,7 @@ func NewProxy(handler http.Handler) *ProxyServer {
 			},
 			CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP384},
 			// ClientAuth:       tls.NoClientCert,                         // 不验证客户端证书
-			// InsecureSkipVerify: false,                                    // 验证客户端证书
+			// InsecureSkipVerify: true, // 是否跳过验证客户端证书
 		}
 	}
 

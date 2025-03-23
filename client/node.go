@@ -100,8 +100,8 @@ func defaultH2Client() *http.Client {
 				tlsConfig := cfg
 				if tlsConfig == nil {
 					tlsConfig = &tls.Config{
-						InsecureSkipVerify: true,
-						MinVersion:         tls.VersionTLS12,
+						// InsecureSkipVerify: true, // 是否跳过验证客户端证书
+						MinVersion: tls.VersionTLS12,
 					}
 				}
 

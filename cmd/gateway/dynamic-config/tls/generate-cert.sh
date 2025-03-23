@@ -3,7 +3,7 @@ set -eo pipefail
 
 # 基础配置（可通过命令行参数覆盖）
 : "${CERT_DIR:=$(dirname "$0")}"   # 默认证书存储目录
-: "${DOMAIN:=gw.apikv.com}"         # 默认域名
+: "${DOMAIN:=gw.localhost}"         # 默认域名
 : "${ALT_NAMES:=DNS:localhost,DNS:127.0.0.1,DNS:${DOMAIN},IP:127.0.0.1}" # SAN配置
 
 # 文件路径配置

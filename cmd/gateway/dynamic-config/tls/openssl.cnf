@@ -5,13 +5,13 @@ prompt = no
 x509_extensions = v3_ca
 
 [req_distinguished_name]
-CN = gw.apikv.com
+CN = gw.localhost
 
 [v3_req]
 basicConstraints = CA:FALSE
 keyUsage = digitalSignature, keyEncipherment
 extendedKeyUsage = serverAuth
-subjectAltName = DNS:localhost,DNS:127.0.0.1,DNS:gw.apikv.com,IP:127.0.0.1
+subjectAltName = DNS:localhost,DNS:127.0.0.1,DNS:gw.localhost,IP:127.0.0.1
 
 [v3_ca]
 basicConstraints = CA:TRUE

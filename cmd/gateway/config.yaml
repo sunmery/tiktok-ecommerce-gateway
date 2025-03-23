@@ -119,48 +119,6 @@ middlewares:
             - POST
 
 endpoints:
-  - path: /v1/products*
-    protocol: HTTP
-    backends:
-      - target: 'discovery:///ecommerce-product-v1'
-    timeout: 4s
-    retry:
-      attempts: 2
-      perTryTimeout: 2s
-      conditions:
-        - byStatusCode: '502-504'
-        - byHeader:
-            name: 'Grpc-Status'
-            value: '14'
-
-  - path: /v1/merchants*
-    protocol: HTTP
-    backends:
-      - target: 'discovery:///ecommerce-product-v1'
-    timeout: 4s
-    retry:
-      attempts: 2
-      perTryTimeout: 2s
-      conditions:
-        - byStatusCode: '502-504'
-        - byHeader:
-            name: 'Grpc-Status'
-            value: '14'
-
-  - path: /v1/categories*
-    protocol: HTTP
-    backends:
-      - target: 'discovery:///ecommerce-category-v1'
-    timeout: 4s
-    retry:
-      attempts: 2
-      perTryTimeout: 2s
-      conditions:
-        - byStatusCode: '502-504'
-        - byHeader:
-            name: 'Grpc-Status'
-            value: '14'
-
   - path: /v1/auth*
     protocol: HTTP
     backends:
@@ -188,3 +146,129 @@ endpoints:
         - byHeader:
             name: 'Grpc-Status'
             value: '14'
+
+  - path: /v1/products*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-product-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/carts*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-cart-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/orders*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-order-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/checkout*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-checkout-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/payment*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-payment-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  - path: /v1/categories*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-category-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+  #  - path: /v1/assistant*
+  #    protocol: HTTP
+  #    backends:
+  #      - target: 'discovery:///ecommerce-assistant-v1'
+  #    timeout: 4s
+  #    retry:
+  #      attempts: 2
+  #      perTryTimeout: 2s
+  #      conditions:
+  #        - byStatusCode: '502-504'
+  #        - byHeader:
+  #            name: 'Grpc-Status'
+  #            value: '14'
+
+  - path: /v1/merchants*
+    protocol: HTTP
+    backends:
+      - target: 'discovery:///ecommerce-merchant-v1'
+    timeout: 4s
+    retry:
+      attempts: 2
+      perTryTimeout: 2s
+      conditions:
+        - byStatusCode: '502-504'
+        - byHeader:
+            name: 'Grpc-Status'
+            value: '14'
+
+#  - path: /v1/admin*
+#    protocol: HTTP
+#    backends:
+#      - target: 'discovery:///ecommerce-admin-v1'
+#    timeout: 4s
+#    retry:
+#      attempts: 2
+#      perTryTimeout: 2s
+#      conditions:
+#        - byStatusCode: '502-504'
+#        - byHeader:
+#            name: 'Grpc-Status'
+#            value: '14'

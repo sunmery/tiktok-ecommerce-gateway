@@ -31,10 +31,10 @@ var (
 	syncedCachedEnforcer *casbin.SyncedCachedEnforcer
 	enforcerMutex        sync.RWMutex
 	cache                = NewCache(5*time.Minute, 10*time.Minute)
+	initialized          bool
 	casdoorUrl           = os.Getenv(constants.CasdoorUrl)
 	userOwner            = constants.UserOwner
 	userIdMetadataKey    = constants.UserIdMetadataKey
-	initialized          bool
 	localPolicyFile      = os.Getenv(constants.PoliciesfilePath)
 	localModelFile       = os.Getenv(constants.ModelFilePath)
 )
@@ -362,8 +362,14 @@ func getUserRoles(userID string) (string, error) {
 }
 
 func fetchRolesFromCasdoor(userID string) (string, error) {
+	// 每次调用时重新获取环境变量，确保使用最新的配置
+	currentCasdoorUrl := os.Getenv(constants.CasdoorUrl)
+	if currentCasdoorUrl == "" {
+		return "", fmt.Errorf("CASDOOR_URL环境变量未设置")
+	}
+
 	id := fmt.Sprintf("%s/%s", userOwner, userID)
-	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/get-user?id=%s&owner=%s", casdoorUrl, id, userOwner), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/api/get-user?id=%s&owner=%s", currentCasdoorUrl, id, userOwner), nil)
 	q := req.URL.Query()
 	// q.Add("owner", userOwner)
 	req.URL.RawQuery = q.Encode()
