@@ -2,13 +2,14 @@ package auth
 
 import (
 	"fmt"
-	"github.com/go-kratos/gateway/router/mux"
-	"github.com/go-kratos/kratos/v2/log"
-	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"os"
 	"runtime"
 	"strings"
+
+	"github.com/go-kratos/gateway/router/mux"
+	"github.com/go-kratos/kratos/v2/log"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
@@ -51,10 +52,12 @@ func Handler(origin http.Handler) http.Handler {
 
 type User struct {
 	Owner                string // 用户所在的组织
-	ID                   string // 用户 ID
+	SignupApplication    string // 用户所在的应用
+	Name                 string // 用户姓名
+	ID                   string // 用户唯一标识
 	Email                string // 用户邮箱
-	IsDeleted            bool   // 用户是否注销 bool
 	Avatar               string // 用户头像 string
+	IsDeleted            bool   // 用户是否注销 bool
 	CreatedTime          string // time.Time
 	UpdatedTime          string // time.Time
 	DeletedTime          string // time.Time

@@ -338,6 +338,7 @@ func Middleware(c *config.Middleware) (middleware.Middleware, error) {
 				req.Header.Set(constants.UserRoleMetadataKey, role)
 				req.Header.Set(constants.UserOwner, userOwner)
 				req.Header.Set(constants.UserIdMetadataKey, userID)
+				logger.Debugf("当前用户ID: '%s' 角色类型: '%s'", userID, role)
 				return next.RoundTrip(req)
 			}
 

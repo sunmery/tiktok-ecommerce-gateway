@@ -15,6 +15,7 @@ p, merchant, /v1/products/*, DELETE, allow
 p, merchant, /v1/products/*/submit-audit, POST, allow
 p, merchant, /v1/categories/*, POST, allow
 p, merchant, /v1/merchants/products, (GET|POST|PUT|DELETE|PATCH), allow
+p, merchant, /v1/merchants/products/*, PUT, allow
 p, merchant, /v1/merchants/inventory/*, (GET|POST|PUT|DELETE|PATCH), allow
 p, merchant, /v1/products/uploadfile, (POST|PUT), allow
 

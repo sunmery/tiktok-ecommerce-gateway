@@ -58,11 +58,15 @@ const (
 	SecretsDirName    = "secrets"
 	JwtPublicFileName = "public.pem"
 
-	// UserOwner 用户组织
-	UserOwner            = "tiktok"
-	UserRoleMetadataKey  = "x-md-global-role"
-	UserOwnerMetadataKey = "x-md-global-owner"
-	UserIdMetadataKey    = "x-md-global-user-id"
+	UserOwner                        = "tiktok" // 用户组织
+	UserProfileMetadataKey           = "x-md-global-user-profile"
+	UserRoleMetadataKey              = "x-md-global-role"
+	UserOwnerMetadataKey             = "x-md-global-owner"
+	UserSignupApplicationMetadataKey = "x-md-global-signup-application"
+	UserNameMetadataKey              = "x-md-global-user-name"
+	UserIdMetadataKey                = "x-md-global-user-id"
+	UserEmailMetadataKey             = "x-md-global-user-email"
+	UserIsDeletedMetadataKey         = "x-md-global-user-is-deleted"
 
 	// RBACDirName 基于角色的访问控制
 	RBACDirName       = "rbac"
