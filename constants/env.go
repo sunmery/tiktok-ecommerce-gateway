@@ -24,6 +24,7 @@ const (
 	TlsDir    = "TLS_DIR"
 	CrtFile   = "CRT_FILE_PATH"
 	KeyFile   = "KEY_FILE_PATH"
+	TlsSource = "TLS_SOURCE" // TLS来源, 如果显式配置为TLS_SOURCE=local, 则从本地dynamic-config/tls/local读取证书, 不配置则默认为dynamic-config/tls目录, 即从配置中心拉取和读取证书
 
 	PoliciesfilePath = "POLICIES_FILE_PATH"
 	ModelFilePath    = "MODEL_FILE_PATH"

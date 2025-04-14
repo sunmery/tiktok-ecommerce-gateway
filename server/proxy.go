@@ -83,6 +83,15 @@ func NewProxy(handler http.Handler) *ProxyServer {
 		certFile := os.Getenv(constants.CrtFile)
 		keyFile := os.Getenv(constants.KeyFile)
 
+		// TLS 证书存放目录的名称
+		// 例如:TLS_SOURCE=local, 则从本地dynamic-config/tls/local读取证书, 默认不启用, 此功能适合本地开发测试
+		// 不配置则默认为dynamic-config/tls目录, 即从配置中心拉取和读取证书的默认目录
+		tlsDirName := os.Getenv(constants.TlsSource)
+		if os.Getenv(constants.TlsSource) != "" {
+			certFile = filepath.Join(fmt.Sprintf("dynamic-config/tls/%s", tlsDirName), constants.CrtFileName)
+			keyFile = filepath.Join(fmt.Sprintf("dynamic-config/tls/%s", tlsDirName), constants.KeyFileName)
+		}
+
 		// 获取当前工作目录
 		wd, _ := os.Getwd()
 		log.Infof("当前工作目录: %s", wd)
